@@ -32,4 +32,8 @@
     <ProjectReference Include="../Dame.Win32/Dame.Win32.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Damelauncher.Benchmarks" />
+  </ItemGroup>
+
 </Project>

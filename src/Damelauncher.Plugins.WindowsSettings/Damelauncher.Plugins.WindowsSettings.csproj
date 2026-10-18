@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Damelauncher" />
+    <InternalsVisibleTo Include="Damelauncher.Benchmarks" />
   </ItemGroup>
 
 </Project>

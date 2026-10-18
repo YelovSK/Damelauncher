@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Damelauncher" />
+    <InternalsVisibleTo Include="Damelauncher.Benchmarks" />
     <InternalsVisibleTo Include="Damelauncher.Plugins.Programs" />
     <InternalsVisibleTo Include="Damelauncher.Plugins.WindowsSettings" />
     <InternalsVisibleTo Include="Damelauncher.Plugins.Everything" />

@@ -6,4 +6,5 @@
   <Project Path="src/Damelauncher.Plugins.Programs/Damelauncher.Plugins.Programs.csproj" />
   <Project Path="src/Damelauncher.Plugins.WindowsSettings/Damelauncher.Plugins.WindowsSettings.csproj" />
   <Project Path="src/Damelauncher/Damelauncher.csproj" />
+  <Project Path="tests/Damelauncher.Benchmarks/Damelauncher.Benchmarks.csproj" />
 </Solution>
