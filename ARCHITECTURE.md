@@ -30,6 +30,8 @@ Providers are used on the window thread, which awaits resume on through `WindowS
 
 A `LaunchResult` is plain data plus the action that runs it, which the provider supplies as a closure. Results score with the shared `FuzzyMatcher`, so scores from different providers compare on one scale.
 
+A result names its icon by where the shell finds it, such as a file path or `shell:AppsFolder\…`, rather than carrying a bitmap, so providers never touch rendering. `ResultIcons` loads the icons of the rows in sight on COM workers through `ShellIcons`, uploads them to Direct2D on the window thread, and keeps the most recently used ones. Rows draw without their icon until it arrives.
+
 ## Ranking
 
 A result's rank is its match score plus a boost for how often and how recently it was launched. Each `LaunchResult` carries an id that's stable within its provider, and `ResultSearch` qualifies it with the provider's id to look it up in `UsageHistory`. The history keeps one score per result, which grows by one with every launch and halves every two weeks, and saves it to `%LocalAppData%\Damelauncher\history.txt` as one tab-separated line per result. The boost grows with the logarithm of that score and is capped, so habit can lift a decent match but not a poor one.

@@ -68,6 +68,14 @@ CloseClipboard
 BITMAPINFOHEADER
 
 // Gdi32
+GetDIBits
+GetObject
+DeleteObject
+GetDC
+ReleaseDC
+BITMAP
+BITMAPINFO
+DIB_USAGE
 
 // Shcore
 GetDpiForMonitor
@@ -77,6 +85,9 @@ MONITOR_DPI_TYPE
 IFileOpenDialog
 FileOpenDialog
 IShellItem
+IShellItemImageFactory
+SIIGBF
+SHCreateItemFromParsingName
 IEnumShellItems
 BHID_EnumItems
 SHGetKnownFolderItem

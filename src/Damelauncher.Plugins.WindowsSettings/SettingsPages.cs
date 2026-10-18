@@ -5,6 +5,9 @@ namespace Damelauncher.Plugins.WindowsSettings;
 /// <summary>Pages of the Settings app, opened through their <c>ms-settings:</c> links.</summary>
 internal static class SettingsPages
 {
+    private const string SettingsAppIcon =
+        @"shell:AppsFolder\windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel";
+
     internal static SettingsEntry[] Create() =>
     [
         Page("Settings", "Windows", "ms-settings:", "preferences", "options", "control panel"),
@@ -73,7 +76,7 @@ internal static class SettingsPages
     ];
 
     private static SettingsEntry Page(string title, string section, string link, params string[] keywords) =>
-        new(link, title, $"Settings › {section}", keywords, () => Open(link));
+        new(link, title, $"Settings › {section}", SettingsAppIcon, keywords, () => Open(link));
 
     private static void Open(string link)
     {

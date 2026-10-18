@@ -17,6 +17,7 @@ internal sealed class LauncherUi : UiElement, IDisposable
     internal const float WindowWidth = 640.0f;
 
     private readonly UiHost _host;
+    private readonly ResultIcons _icons;
     private readonly TextInput _query;
     private readonly ResultList _results;
     private readonly ScrollView _resultsView;
@@ -28,7 +29,8 @@ internal sealed class LauncherUi : UiElement, IDisposable
     {
         _host = new UiHost(this, deviceContext, directWriteFactory, dpi, Themes.Dark);
         _query = new TextInput("Search");
-        _results = new ResultList();
+        _icons = new ResultIcons(deviceContext, dpi, _host.Root.InvalidateVisual);
+        _results = new ResultList(_icons);
         _resultsView = new ScrollView(_results) { IsVisible = false };
 
         AddChild(new StackPanel(UiOrientation.Vertical, _query, _resultsView)
@@ -111,7 +113,11 @@ internal sealed class LauncherUi : UiElement, IDisposable
 
     internal bool HandleTextInput(string text) => _host.Root.HandleTextInput(text);
 
-    internal void SetDpi(float dpi) => _host.Root.SetDpi(dpi);
+    internal void SetDpi(float dpi)
+    {
+        _host.Root.SetDpi(dpi);
+        _icons.SetDpi(dpi);
+    }
 
     internal bool Update()
     {
@@ -130,7 +136,11 @@ internal sealed class LauncherUi : UiElement, IDisposable
 
     protected override bool HitTestCore(PointF position) => false;
 
-    public void Dispose() => _host.Dispose();
+    public void Dispose()
+    {
+        _icons.Dispose();
+        _host.Dispose();
+    }
 
     private static float GetWindowHeight(int rows) =>
         (2.0f * UiDesign.WindowMargin) + QueryHeight

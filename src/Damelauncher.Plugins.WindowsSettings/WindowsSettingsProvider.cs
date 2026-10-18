@@ -16,7 +16,7 @@ internal sealed class WindowsSettingsProvider : IResultProvider
         {
             if (entry.Score(query) is { } score)
             {
-                results.Add(new LaunchResult(entry.Id, entry.Title, entry.Subtitle, score, entry.Execute));
+                results.Add(new LaunchResult(entry.Id, entry.Title, entry.Subtitle, entry.IconSource, score, entry.Execute));
             }
         }
 

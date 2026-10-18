@@ -14,7 +14,7 @@ internal sealed class LauncherCommandsProvider(Action quit) : IResultProvider
     public ValueTask<IReadOnlyList<LaunchResult>> QueryAsync(string query, CancellationToken cancellationToken)
     {
         IReadOnlyList<LaunchResult> results = FuzzyMatcher.Score(query, QuitTitle) is { } score
-            ? [new LaunchResult("quit", QuitTitle, "Exit the launcher", score, quit)]
+            ? [new LaunchResult("quit", QuitTitle, "Exit the launcher", Environment.ProcessPath, score, quit)]
             : [];
         return ValueTask.FromResult(results);
     }

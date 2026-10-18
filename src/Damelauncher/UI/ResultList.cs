@@ -14,11 +14,15 @@ internal sealed class ResultList : UiElement
 {
     internal const float RowHeight = 48.0f;
     private const float RowPadding = 12.0f;
+    private const float TextLeft = RowPadding + ResultIcons.Size + RowPadding;
     private static readonly UiFont TitleFont = new(UiDesign.BodyFontSize, FontWeight.Medium, Ellipsis: true);
     private static readonly UiFont SubtitleFont = new(UiDesign.CaptionFontSize, Ellipsis: true);
 
+    private readonly ResultIcons _icons;
     private IReadOnlyList<LaunchResult> _results = [];
     private int _selectedIndex;
+
+    internal ResultList(ResultIcons icons) => _icons = icons;
 
     internal event Action<LaunchResult>? ResultInvoked;
 
@@ -74,10 +78,15 @@ internal sealed class ResultList : UiElement
     protected override SizeF MeasureCore(SizeF availableSize) =>
         new(float.IsFinite(availableSize.Width) ? availableSize.Width : 0.0f, _results.Count * RowHeight);
 
-    // Every row is drawn: there are few enough, and the scroll view clips the ones out of sight.
+    // Only the rows in sight, so icons load only for those. The scroll view moves this list up
+    // by its offset and shows as much of it as fits its own height.
     protected override void DrawCore(in UiDrawContext context)
     {
-        for (int index = 0; index < _results.Count; index++)
+        float visibleTop = -Bounds.Y;
+        float visibleBottom = visibleTop + (Parent?.Bounds.Height ?? Bounds.Height);
+        int first = Math.Max(0, (int)(visibleTop / RowHeight));
+        int last = Math.Min(_results.Count, (int)MathF.Ceiling(visibleBottom / RowHeight));
+        for (int index = first; index < last; index++)
         {
             DrawRow(context, _results[index], GetRowBounds(index), index == _selectedIndex);
         }
@@ -85,7 +94,7 @@ internal sealed class ResultList : UiElement
 
     private RectangleF GetRowBounds(int index) => new(0.0f, index * RowHeight, Bounds.Width, RowHeight);
 
-    private static void DrawRow(in UiDrawContext context, LaunchResult result, RectangleF row, bool selected)
+    private void DrawRow(in UiDrawContext context, LaunchResult result, RectangleF row, bool selected)
     {
         if (selected)
         {
@@ -94,16 +103,25 @@ internal sealed class ResultList : UiElement
                 context.Palette.ControlHover);
         }
 
-        float textWidth = MathF.Max(0.0f, row.Width - (2.0f * RowPadding));
+        // Results without an icon keep its space, so every title starts in the same column.
+        if (result.IconSource is { } source && _icons.Get(source) is { } icon)
+        {
+            float inset = (RowHeight - ResultIcons.Size) / 2.0f;
+            context.DrawBitmapFitted(
+                icon,
+                new RectangleF(row.X + RowPadding, row.Y + inset, ResultIcons.Size, ResultIcons.Size));
+        }
+
+        float textWidth = MathF.Max(0.0f, row.Width - TextLeft - RowPadding);
         context.DrawText(
             result.Title,
             TitleFont,
-            new Rect(row.X + RowPadding, row.Y + 4.0f, textWidth, 22.0f),
+            new Rect(row.X + TextLeft, row.Y + 4.0f, textWidth, 22.0f),
             context.Palette.PrimaryText);
         context.DrawText(
             result.Subtitle,
             SubtitleFont,
-            new Rect(row.X + RowPadding, row.Y + 24.0f, textWidth, 18.0f),
+            new Rect(row.X + TextLeft, row.Y + 24.0f, textWidth, 18.0f),
             context.Palette.SecondaryText);
     }
 }

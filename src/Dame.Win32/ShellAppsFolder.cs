@@ -45,9 +45,12 @@ internal static class ShellAppsFolder
         }
     }
 
+    /// <summary>The app's location in the shell, where its icon can be found too.</summary>
+    internal static string GetPath(string parsingName) => FolderPath + parsingName;
+
     internal static void Launch(string parsingName)
     {
-        using var process = Process.Start(new ProcessStartInfo(FolderPath + parsingName)
+        using var process = Process.Start(new ProcessStartInfo(GetPath(parsingName))
         {
             UseShellExecute = true,
         });

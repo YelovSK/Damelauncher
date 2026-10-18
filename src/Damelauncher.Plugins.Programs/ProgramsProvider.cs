@@ -25,7 +25,13 @@ internal sealed class ProgramsProvider : IResultProvider
         {
             if (FuzzyMatcher.Score(query, app.Name) is { } score)
             {
-                results.Add(new LaunchResult(app.ParsingName, app.Name, "App", score, () => ShellAppsFolder.Launch(app.ParsingName)));
+                results.Add(new LaunchResult(
+                    app.ParsingName,
+                    app.Name,
+                    "App",
+                    ShellAppsFolder.GetPath(app.ParsingName),
+                    score,
+                    () => ShellAppsFolder.Launch(app.ParsingName)));
             }
         }
 
