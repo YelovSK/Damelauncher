@@ -63,6 +63,68 @@ public sealed class ResultSearchTests
     }
 
     [TestMethod]
+    public void ShowsOnlyAsManyResultsAsChosen()
+    {
+        var provider = new FakeProvider("programs");
+        provider.Answer = _ => Enumerable.Range(0, 10).Select(score => new ScoredResult(provider.Result($"{score}"), score));
+        using ResultSearch search = Create(provider);
+        search.MaxResults = 3;
+
+        search.Search("q");
+
+        CollectionAssert.AreEqual(new[] { "9", "8", "7" }, Ids(LastShown));
+    }
+
+    [TestMethod]
+    public void AProvidersOwnLimitKeepsOnlyItsBestResults()
+    {
+        var files = new FakeProvider("files");
+        var programs = new FakeProvider("programs");
+        files.Answer = _ => [new(files.Result("c"), 300), new(files.Result("a"), 500), new(files.Result("b"), 400)];
+        programs.Answer = _ => [new(programs.Result("p"), 100)];
+        using ResultSearch search = Create(files, programs);
+        search.SetRouting("files", ProviderRouting.Default with { MaxResults = 2 });
+
+        search.Search("q");
+
+        CollectionAssert.AreEqual(new[] { "a", "b", "p" }, Ids(LastShown));
+    }
+
+    // Otherwise the one result someone picks every day could be the one a limit cuts.
+    [TestMethod]
+    public void AProvidersOwnLimitCountsHowOftenItsResultsWereLaunched()
+    {
+        var files = new FakeProvider("files");
+        LaunchResult usual = files.Result("usual");
+        files.Answer = _ => [new(files.Result("other"), 20 * FuzzyMatcher.Point), new(usual, 20 * FuzzyMatcher.Point)];
+        using ResultSearch search = Create(files);
+        search.SetRouting("files", ProviderRouting.Default with { MaxResults = 1 });
+
+        search.RecordLaunch(usual);
+        search.Search("q");
+
+        CollectionAssert.AreEqual(new[] { "usual" }, Ids(LastShown));
+    }
+
+    [TestMethod]
+    public void ProvidersAreToldHowManyOfTheirResultsCanBeShown()
+    {
+        var unlimited = new FakeProvider("unlimited");
+        var limited = new FakeProvider("limited");
+        var generous = new FakeProvider("generous");
+        using ResultSearch search = Create(unlimited, limited, generous);
+        search.MaxResults = 10;
+        search.SetRouting("limited", ProviderRouting.Default with { MaxResults = 4 });
+        search.SetRouting("generous", ProviderRouting.Default with { MaxResults = 30 });
+
+        search.Search("q");
+
+        CollectionAssert.AreEqual(new[] { 10 }, unlimited.MaxResults);
+        CollectionAssert.AreEqual(new[] { 4 }, limited.MaxResults);
+        CollectionAssert.AreEqual(new[] { 10 }, generous.MaxResults);
+    }
+
+    [TestMethod]
     public void ABlankQueryShowsNothingWithoutAskingTheProviders()
     {
         var provider = new FakeProvider("programs");

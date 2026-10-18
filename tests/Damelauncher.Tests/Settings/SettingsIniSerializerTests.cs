@@ -26,9 +26,10 @@ public sealed class SettingsIniSerializerTests
             Theme = ThemeId.CatppuccinMocha,
             HotKey = new HotKey(HotKeyModifiers.Control | HotKeyModifiers.Shift, WindowKey.K),
             OpenWithWindowsKey = true,
+            MaxResults = 25,
             Plugins = new Dictionary<string, PluginSettings>
             {
-                ["everything"] = new() { Enabled = true, Keyword = "find", InNormalSearches = false },
+                ["everything"] = new() { Enabled = true, Keyword = "find", InNormalSearches = false, MaxResults = 7 },
                 ["settings"] = new() { Enabled = false, Keyword = string.Empty },
                 ["programs"] = new() { Keyword = null },
             },
@@ -40,6 +41,7 @@ public sealed class SettingsIniSerializerTests
         Assert.AreEqual(written.Theme, read.Theme);
         Assert.AreEqual(written.HotKey, read.HotKey);
         Assert.AreEqual(written.OpenWithWindowsKey, read.OpenWithWindowsKey);
+        Assert.AreEqual(written.MaxResults, read.MaxResults);
         CollectionAssert.AreEquivalent(written.Plugins.Keys.ToArray(), read.Plugins.Keys.ToArray());
         foreach ((string id, PluginSettings plugin) in written.Plugins)
         {
@@ -64,10 +66,12 @@ public sealed class SettingsIniSerializerTests
     public void AnUnreadableValueKeepsItsDefaultAndIsReported()
     {
         (LauncherSettings settings, IReadOnlyList<string> ignored) =
-            SettingsIniSerializer.Read("hotkey=Alt+Banana\ntheme=chartreuse\n");
+            SettingsIniSerializer.Read("hotkey=Alt+Banana\ntheme=chartreuse\nmaxResults=0\n[plugins.everything]\nmaxResults=many\n");
 
         Assert.AreEqual(HotKey.Default, settings.HotKey);
         Assert.AreEqual(ThemeId.Dark, settings.Theme);
-        Assert.HasCount(2, ignored);
+        Assert.AreEqual(new LauncherSettings().MaxResults, settings.MaxResults);
+        Assert.IsNull(settings.GetPlugin("everything").MaxResults);
+        Assert.HasCount(4, ignored);
     }
 }

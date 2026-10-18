@@ -47,7 +47,7 @@ internal static class Program
 
     private static int Query(IResultProvider provider, string query)
     {
-        ValueTask<IReadOnlyList<ScoredResult>> results = provider.QueryAsync(query, CancellationToken.None);
+        ValueTask<IReadOnlyList<ScoredResult>> results = provider.QueryAsync(query, 50, CancellationToken.None);
         if (!results.IsCompleted)
         {
             throw new InvalidOperationException($"{provider.Name} didn't answer synchronously.");

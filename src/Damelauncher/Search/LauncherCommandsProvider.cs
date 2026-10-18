@@ -24,7 +24,7 @@ internal sealed class LauncherCommandsProvider : IResultProvider
 
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken)
+    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, int maxResults, CancellationToken cancellationToken)
     {
         _matches.Clear();
         foreach (LaunchResult command in _commands)

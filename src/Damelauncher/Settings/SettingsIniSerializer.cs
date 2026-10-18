@@ -18,6 +18,13 @@ internal static class SettingsIniSerializer
             (s, value) => s with { HotKey = value }),
         Binding.Bool(Root, "windowsKey", s => s.OpenWithWindowsKey, (s, value) => s with { OpenWithWindowsKey = value }),
         Binding.Enum(Root, "theme", s => s.Theme, (s, value) => s with { Theme = value }),
+        Binding.Int(
+            Root,
+            "maxResults",
+            LauncherSettings.SmallestMaxResults,
+            LauncherSettings.LargestMaxResults,
+            s => s.MaxResults,
+            (s, value) => s with { MaxResults = value }),
         Binding.Custom(ReadPlugins, WritePlugins),
     ];
 
@@ -54,6 +61,7 @@ internal static class SettingsIniSerializer
                 Enabled = ReadBool(document, section, "enabled", ignored) ?? true,
                 Keyword = document.Get(section, "keyword"),
                 InNormalSearches = ReadBool(document, section, "normalSearch", ignored) ?? true,
+                MaxResults = ReadMaxResults(document, section, ignored),
             };
             plugins[section[PluginSectionPrefix.Length..]] = plugin;
         }
@@ -72,7 +80,30 @@ internal static class SettingsIniSerializer
             {
                 document.Set(section, "keyword", keyword);
             }
+
+            if (plugin.MaxResults is { } maxResults)
+            {
+                document.Set(section, "maxResults", IniValue.FormatInt(maxResults));
+            }
         }
+    }
+
+    private static int? ReadMaxResults(IniDocument document, string section, List<string> ignored)
+    {
+        if (document.Get(section, "maxResults") is not { } text)
+        {
+            return null;
+        }
+
+        if (IniValue.ParseInt(text) is int value
+            && value >= LauncherSettings.SmallestMaxResults
+            && value <= LauncherSettings.LargestMaxResults)
+        {
+            return value;
+        }
+
+        ignored.Add($"{section}.maxResults '{text}'");
+        return null;
     }
 
     private static bool? ReadBool(IniDocument document, string section, string key, List<string> ignored)

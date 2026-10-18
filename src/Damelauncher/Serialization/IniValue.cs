@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Damelauncher.Serialization;
 
 // How typed values are spelled in an INI file. Parsers return null for anything they can't read.
@@ -11,6 +13,11 @@ internal static class IniValue
         "false" => false,
         _ => null,
     };
+
+    internal static string FormatInt(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    internal static int? ParseInt(string? text) =>
+        int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int result) ? result : null;
 
     // Enum values are stored as their names in camelCase, so renaming a member changes the file format.
     internal static string FormatEnum<T>(T value)

@@ -48,7 +48,10 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _plugins = [new ProgramsProvider(), new WindowsSettingsProvider(), new EverythingProvider()];
         _search = new ResultSearch(
             UsageHistory.Load(UsageHistory.DefaultPath),
-            [.. _plugins, new LauncherCommandsProvider(OpenSettings, _window.Close)]);
+            [.. _plugins, new LauncherCommandsProvider(OpenSettings, _window.Close)])
+        {
+            MaxResults = _settings.Current.MaxResults,
+        };
         foreach (IResultProvider plugin in _plugins)
         {
             RoutePlugin(plugin);
@@ -82,6 +85,15 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
     }
 
     LauncherSettings ISettingsActions.Settings => _settings.Current;
+
+    int ISettingsActions.MaxResults
+    {
+        set
+        {
+            _settings.Update(_settings.Current with { MaxResults = value });
+            _search.MaxResults = value;
+        }
+    }
 
     ThemeId ISettingsActions.Theme
     {
@@ -205,7 +217,11 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         string? keyword = (settings.Keyword ?? plugin.DefaultKeyword)?.Trim();
         _search.SetRouting(
             plugin.Id,
-            new ProviderRouting(settings.Enabled, string.IsNullOrEmpty(keyword) ? null : keyword, settings.InNormalSearches));
+            new ProviderRouting(
+                settings.Enabled,
+                string.IsNullOrEmpty(keyword) ? null : keyword,
+                settings.InNormalSearches,
+                settings.MaxResults ?? plugin.DefaultMaxResults));
     }
 
     private void OpenSettings()

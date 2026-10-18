@@ -21,14 +21,18 @@ internal sealed class FakeProvider(string id) : IResultProvider
 
     internal List<string> Queries { get; } = [];
 
+    /// <summary>How many results each query could show at most, in the order they were asked.</summary>
+    internal List<int> MaxResults { get; } = [];
+
     /// <summary>The queries answered later, in the order they were asked.</summary>
     internal List<TaskCompletionSource<IReadOnlyList<ScoredResult>>> Pending { get; } = [];
 
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken)
+    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, int maxResults, CancellationToken cancellationToken)
     {
         Queries.Add(query);
+        MaxResults.Add(maxResults);
         if (Failure is not null)
         {
             throw Failure;

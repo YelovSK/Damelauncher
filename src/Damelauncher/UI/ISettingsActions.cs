@@ -10,6 +10,8 @@ internal interface ISettingsActions
 
     public ThemeId Theme { set; }
 
+    public int MaxResults { set; }
+
     /// <summary>The plugins whose settings can be changed.</summary>
     public IReadOnlyList<IResultProvider> Plugins { get; }
 

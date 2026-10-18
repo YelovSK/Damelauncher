@@ -15,6 +15,21 @@ internal abstract class IniBinding<TModel>
         Func<TModel, bool, TModel> set) =>
         new(section, key, IniValue.ParseBool, IniValue.FormatBool, get, set);
 
+    internal static IniKeyBinding<TModel, int> Int(
+        string section,
+        string key,
+        int minimum,
+        int maximum,
+        Func<TModel, int> get,
+        Func<TModel, int, TModel> set) =>
+        new(
+            section,
+            key,
+            text => IniValue.ParseInt(text) is int value && value >= minimum && value <= maximum ? value : null,
+            IniValue.FormatInt,
+            get,
+            set);
+
     internal static IniKeyBinding<TModel, T> Enum<T>(
         string section,
         string key,

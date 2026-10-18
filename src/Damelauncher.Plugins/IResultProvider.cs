@@ -26,12 +26,22 @@ internal interface IResultProvider
     /// <summary>Prepares the provider, for example by indexing. Runs once, before its first query.</summary>
     public Task InitializeAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// How many of the provider's results are shown at most, until the user picks another
+    /// number. <see langword="null"/> to be limited only by how many the launcher shows in all.
+    /// </summary>
+    public int? DefaultMaxResults => null;
+
     /// <summary>The results for a trimmed, non-empty query. A newer query cancels this one.</summary>
+    /// <param name="maxResults">
+    /// How many of them can be shown. The launcher keeps the best that many itself, so a provider
+    /// only needs this when finding fewer saves it work, such as asking another process for less.
+    /// </param>
     /// <remarks>
     /// The launcher is done with the list before it asks again, so a provider can hand out the
     /// same list every time, refilled, and keep a keystroke from allocating.
     /// </remarks>
-    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken);
+    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, int maxResults, CancellationToken cancellationToken);
 
     /// <summary>
     /// What else can be done with one of this provider's results, such as running it as

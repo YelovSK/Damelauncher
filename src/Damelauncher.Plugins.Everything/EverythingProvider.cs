@@ -6,7 +6,6 @@ namespace Damelauncher.Plugins.Everything;
 /// <summary>Finds files and folders anywhere through Everything, when it's running.</summary>
 internal sealed class EverythingProvider : IResultProvider, IDisposable
 {
-    private const int MaxResults = 20;
     // Files rank below equally good matches from other providers, which are far fewer and
     // likelier the ones meant, but a file whose name matches well still beats a poor match.
     private const int ScoreOffset = -20 * FuzzyMatcher.Point;
@@ -19,13 +18,16 @@ internal sealed class EverythingProvider : IResultProvider, IDisposable
 
     public string DefaultKeyword => "f";
 
+    // Few enough that files don't crowd out everything else.
+    public int? DefaultMaxResults => 20;
+
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     // Files are new on every query, unlike the other providers' results, since they come from
     // another process. Reusing their list wouldn't save much next to the trip there.
-    public async ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken)
+    public async ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, int maxResults, CancellationToken cancellationToken)
     {
-        if (await _client.SearchAsync(query, MaxResults, cancellationToken) is not { } items)
+        if (await _client.SearchAsync(query, maxResults, cancellationToken) is not { } items)
         {
             return [];
         }

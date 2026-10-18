@@ -23,7 +23,7 @@ internal sealed class ProgramsProvider : IResultProvider
         _programs = [.. apps.Select(CreateResult)];
     }
 
-    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken)
+    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, int maxResults, CancellationToken cancellationToken)
     {
         _matches.Clear();
         foreach (LaunchResult program in _programs)

@@ -65,7 +65,10 @@ internal sealed class SettingsUi : UiElement, IDisposable
             Described(
                 new Toggle("Open with the Windows key", actions.OpensWithWindowsKey, value => actions.OpensWithWindowsKey = value),
                 "Tapping it on its own opens the launcher instead of Start. Shortcuts like Win+E still work."),
-            new Toggle("Start with Windows", actions.StartsWithWindows, value => actions.StartsWithWindows = value));
+            new Toggle("Start with Windows", actions.StartsWithWindows, value => actions.StartsWithWindows = value),
+            new SettingsRow(
+                "Maximum results",
+                MaxResultsSlider(actions.Settings.MaxResults, value => actions.MaxResults = value)));
         _pages = [general, .. actions.Plugins.Select(CreatePluginPage)];
         _pagesArea = new Overlay(_pages)
         {
@@ -153,6 +156,15 @@ internal sealed class SettingsUi : UiElement, IDisposable
             Transition = PageTransition,
         };
 
+    private static Slider MaxResultsSlider(int value, Action<int> changed) =>
+        new(
+            LauncherSettings.SmallestMaxResults,
+            LauncherSettings.LargestMaxResults,
+            step: 1.0,
+            value,
+            count => changed((int)count),
+            count => $"{count:0}");
+
     private static StackPanel Described(UiElement setting, string description) =>
         new(
             UiOrientation.Vertical,
@@ -183,7 +195,14 @@ internal sealed class SettingsUi : UiElement, IDisposable
                 "When off, it only answers queries that start with its keyword."),
             new SettingsRow(
                 "Keyword",
-                Described(keyword, $"Typed with a space before a query, it searches only {plugin.Name}.")));
+                Described(keyword, $"Typed with a space before a query, it searches only {plugin.Name}.")),
+            new SettingsRow(
+                "Maximum results",
+                Described(
+                    MaxResultsSlider(
+                        settings.MaxResults ?? plugin.DefaultMaxResults ?? _actions.Settings.MaxResults,
+                        value => UpdatePlugin(plugin, current => current with { MaxResults = value })),
+                    "Its best ones are kept, counting how often they were launched. Never more than the maximum in General.")));
     }
 
     private void SelectPage(int page)

@@ -14,7 +14,6 @@ namespace Damelauncher.Search;
 /// </remarks>
 internal sealed class ResultSearch : IDisposable
 {
-    private const int MaxResults = 50;
     // How long a query's results wait for every provider to answer before showing what's there.
     private static readonly TimeSpan AnswerDeadline = TimeSpan.FromMilliseconds(100);
     // The boost grows with each doubling of a result's usage, so the first few launches count
@@ -31,8 +30,9 @@ internal sealed class ResultSearch : IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SynchronizationContext? _context;
     private readonly Timer _deadline;
-    // The best results while merging, highest score first.
-    private readonly ScoredResult[] _best = new ScoredResult[MaxResults];
+    // The best results while merging, highest score first: all of them, and one provider's.
+    private ScoredResult[] _best = new ScoredResult[50];
+    private ScoredResult[] _providerBest = new ScoredResult[50];
     private CancellationTokenSource? _query;
     private PendingQuery? _pending;
     private long _deadlineArmedAt;
@@ -54,7 +54,19 @@ internal sealed class ResultSearch : IDisposable
     /// </summary>
     internal event Action<IReadOnlyList<LaunchResult>>? ResultsChanged;
 
-    /// <summary>Changes which queries reach a provider, from the next search on.</summary>
+    /// <summary>How many results are shown at most, from the next search on.</summary>
+    internal int MaxResults
+    {
+        get => _best.Length;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _best = new ScoredResult[value];
+            _providerBest = new ScoredResult[value];
+        }
+    }
+
+    /// <summary>Changes which queries reach a provider, and how many of its results show, from the next search on.</summary>
     internal void SetRouting(string providerId, ProviderRouting routing)
     {
         int index = Array.FindIndex(_providers, provider => provider.Id == providerId);
@@ -147,7 +159,7 @@ internal sealed class ResultSearch : IDisposable
         try
         {
             await _initializations[index].WaitAsync(cancellationToken);
-            pending.Answers[index] = await provider.QueryAsync(query, cancellationToken);
+            pending.Answers[index] = await provider.QueryAsync(query, GetMaxResults(index), cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -235,39 +247,34 @@ internal sealed class ResultSearch : IDisposable
     }
 
     // Keeps the best results in order as they come instead of sorting them all, since a short
-    // query can match hundreds. Each goes after those with an equal score, so ties keep the
-    // providers' order and each provider's own.
+    // query can match hundreds. A provider's own limit keeps its best ones first, scored with
+    // their launch history, so one that's used often isn't the one cut.
     private LaunchResult[] Merge(IReadOnlyList<ScoredResult>?[] answers)
     {
         DateTime now = DateTime.UtcNow;
         int count = 0;
-        foreach (IReadOnlyList<ScoredResult>? results in answers)
+        for (int provider = 0; provider < answers.Length; provider++)
         {
-            if (results is null)
+            if (answers[provider] is not { } results)
             {
                 continue;
             }
 
+            int providerCount = 0;
+            int providerLimit = GetMaxResults(provider);
             for (int index = 0; index < results.Count; index++)
             {
                 LaunchResult result = results[index].Result;
-                int score = results[index].Score + GetBoost(result, now);
-                if (count == MaxResults && score <= _best[MaxResults - 1].Score)
-                {
-                    continue;
-                }
-
-                int position = count;
-                while (position > 0 && _best[position - 1].Score < score)
-                {
-                    position--;
-                }
-
-                int last = Math.Min(count, MaxResults - 1);
-                Array.Copy(_best, position, _best, position + 1, last - position);
-                _best[position] = new ScoredResult(result, score);
-                count = Math.Min(count + 1, MaxResults);
+                var scored = new ScoredResult(result, results[index].Score + GetBoost(result, now));
+                Insert(_providerBest, ref providerCount, providerLimit, scored);
             }
+
+            for (int index = 0; index < providerCount; index++)
+            {
+                Insert(_best, ref count, _best.Length, _providerBest[index]);
+            }
+
+            Array.Clear(_providerBest, 0, providerCount);
         }
 
         if (count == 0)
@@ -284,6 +291,29 @@ internal sealed class ResultSearch : IDisposable
         Array.Clear(_best, 0, count);
         return merged;
     }
+
+    // Places a result among the best so far, after those with an equal score, so ties keep the
+    // order they came in. A full buffer drops its lowest.
+    private static void Insert(ScoredResult[] best, ref int count, int capacity, ScoredResult candidate)
+    {
+        if (count == capacity && candidate.Score <= best[capacity - 1].Score)
+        {
+            return;
+        }
+
+        int position = count;
+        while (position > 0 && best[position - 1].Score < candidate.Score)
+        {
+            position--;
+        }
+
+        int last = Math.Min(count, capacity - 1);
+        Array.Copy(best, position, best, position + 1, last - position);
+        best[position] = candidate;
+        count = Math.Min(count + 1, capacity);
+    }
+
+    private int GetMaxResults(int provider) => Math.Min(_routing[provider].MaxResults ?? _best.Length, _best.Length);
 
     private int GetBoost(LaunchResult result, DateTime now)
     {
