@@ -14,6 +14,8 @@ internal sealed class ResultList : UiElement
 {
     internal const float RowHeight = 48.0f;
     private const float RowPadding = 12.0f;
+    // Fainter than the selection, which shares its color, so the two never read as the same.
+    private const float HoverOpacity = 0.45f;
     private static readonly UiFont TitleFont = new(UiDesign.BodyFontSize, FontWeight.Medium, Ellipsis: true);
     private static readonly UiFont SubtitleFont = new(UiDesign.CaptionFontSize, Ellipsis: true);
     // Smaller than the icon box, since shell icons leave a margin inside theirs.
@@ -23,6 +25,8 @@ internal sealed class ResultList : UiElement
     private IReadOnlyList<LaunchResult> _results = [];
     private int _selectedIndex;
     private float _textLeft = RowPadding;
+    // In the parent's space, so the hovered row follows the list as it scrolls under a still pointer.
+    private float? _pointerY;
 
     internal ResultList(ResultIcons icons) => _icons = icons;
 
@@ -78,6 +82,11 @@ internal sealed class ResultList : UiElement
 
     internal override UiPointerResult OnPointerEvent(in WindowPointerEvent input)
     {
+        if (input.Kind == WindowPointerEventKind.Moved)
+        {
+            SetPointerY(input.Position.Y + Bounds.Y);
+        }
+
         if (input.Kind != WindowPointerEventKind.Pressed
             || input.Button is not (PointerButton.Primary or PointerButton.Secondary))
         {
@@ -102,6 +111,25 @@ internal sealed class ResultList : UiElement
         return new UiPointerResult(Consumed: true);
     }
 
+    protected override void OnVisualStateChanged()
+    {
+        if (!HasVisualState(UiVisualState.Hovered))
+        {
+            SetPointerY(null);
+        }
+    }
+
+    private void SetPointerY(float? pointerY)
+    {
+        if (pointerY != _pointerY)
+        {
+            _pointerY = pointerY;
+            InvalidateVisual();
+        }
+    }
+
+    private int HoveredIndex => _pointerY is { } y ? (int)MathF.Floor((y - Bounds.Y) / RowHeight) : -1;
+
     protected override SizeF MeasureCore(SizeF availableSize) =>
         new(float.IsFinite(availableSize.Width) ? availableSize.Width : 0.0f, _results.Count * RowHeight);
 
@@ -113,21 +141,24 @@ internal sealed class ResultList : UiElement
         float visibleBottom = visibleTop + (Parent?.Bounds.Height ?? Bounds.Height);
         int first = Math.Max(0, (int)(visibleTop / RowHeight));
         int last = Math.Min(_results.Count, (int)MathF.Ceiling(visibleBottom / RowHeight));
+        int hovered = HoveredIndex;
         for (int index = first; index < last; index++)
         {
-            DrawRow(context, _results[index], GetRowBounds(index), index == _selectedIndex);
+            float highlight = index == _selectedIndex ? 1.0f : index == hovered ? HoverOpacity : 0.0f;
+            DrawRow(context, _results[index], GetRowBounds(index), highlight);
         }
     }
 
     private RectangleF GetRowBounds(int index) => new(0.0f, index * RowHeight, Bounds.Width, RowHeight);
 
-    private void DrawRow(in UiDrawContext context, LaunchResult result, RectangleF row, bool selected)
+    private void DrawRow(in UiDrawContext context, LaunchResult result, RectangleF row, float highlight)
     {
-        if (selected)
+        if (highlight > 0.0f)
         {
             context.FillRoundedRectangle(
                 new RoundedRectangle(row, UiDesign.ControlCornerRadius, UiDesign.ControlCornerRadius),
-                context.Palette.ControlHover);
+                context.Palette.ControlHover,
+                highlight);
         }
 
         float inset = (RowHeight - ResultIcons.Size) / 2.0f;
