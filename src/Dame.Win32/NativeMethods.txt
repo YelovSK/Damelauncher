@@ -45,6 +45,13 @@ SetProcessDpiAwarenessContext
 IsWindowVisible
 GetCursorPos
 RegisterHotKey
+LockWorkStation
+ExitWindowsEx
+EXIT_WINDOWS_FLAGS
+SHUTDOWN_REASON
+MessageBox
+MESSAGEBOX_STYLE
+MESSAGEBOX_RESULT
 UnregisterHotKey
 OpenClipboard
 EmptyClipboard
@@ -111,7 +118,20 @@ DROPEFFECT
 // Dwmapi
 DwmSetWindowAttribute
 
+// PowrProf
+SetSuspendState
+
+// Advapi32
+OpenProcessToken
+LookupPrivilegeValue
+AdjustTokenPrivileges
+SE_SHUTDOWN_NAME
+TOKEN_PRIVILEGES
+TOKEN_ACCESS_MASK
+TOKEN_PRIVILEGES_ATTRIBUTES
+
 // Kernel32
+CloseHandle
 GetModuleHandle
 GetCurrentProcess
 GetProcessTimes

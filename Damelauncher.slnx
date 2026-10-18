@@ -3,5 +3,6 @@
   <Project Path="src/Dame.Win32/Dame.Win32.csproj" />
   <Project Path="src/Damelauncher.Plugins/Damelauncher.Plugins.csproj" />
   <Project Path="src/Damelauncher.Plugins.Programs/Damelauncher.Plugins.Programs.csproj" />
+  <Project Path="src/Damelauncher.Plugins.WindowsSettings/Damelauncher.Plugins.WindowsSettings.csproj" />
   <Project Path="src/Damelauncher/Damelauncher.csproj" />
 </Solution>

@@ -3,6 +3,7 @@ using Dame.Win32;
 using Dame.Win32.Input;
 using Damelauncher.Plugins;
 using Damelauncher.Plugins.Programs;
+using Damelauncher.Plugins.WindowsSettings;
 using Damelauncher.Rendering;
 using Damelauncher.Search;
 using Damelauncher.UI;
@@ -34,7 +35,10 @@ internal sealed class LauncherApp : IDisposable
             _renderer.DeviceContext,
             _renderer.DirectWriteFactory,
             _window.Dpi);
-        _search = new ResultSearch(new ProgramsProvider(), new LauncherCommandsProvider(_window.Close));
+        _search = new ResultSearch(
+            new ProgramsProvider(),
+            new WindowsSettingsProvider(),
+            new LauncherCommandsProvider(_window.Close));
         _ui.QueryChanged += _search.Search;
         _search.ResultsChanged += _ui.SetResults;
         _ui.Invalidated += _window.RequestRepaint;
