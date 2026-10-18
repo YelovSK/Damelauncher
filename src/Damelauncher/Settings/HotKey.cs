@@ -5,7 +5,7 @@ namespace Damelauncher.Settings;
 /// <summary>A system-wide key combination, written the way it reads, such as <c>Alt+Shift+Space</c>.</summary>
 internal readonly record struct HotKey(HotKeyModifiers Modifiers, WindowKey Key)
 {
-    internal static readonly HotKey Default = new(HotKeyModifiers.Alt | HotKeyModifiers.Shift, WindowKey.Space);
+    internal static readonly HotKey Default = new(HotKeyModifiers.Alt, WindowKey.Space);
 
     private static readonly (HotKeyModifiers Modifier, string Label)[] ModifierLabels =
     [
