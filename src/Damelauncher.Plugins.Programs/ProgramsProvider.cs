@@ -9,6 +9,8 @@ internal sealed class ProgramsProvider : IResultProvider
 
     public string Id => "programs";
 
+    public string Name => "Programs";
+
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         using var worker = new ComWorkerQueue<object?>("Programs index", 1, static () => null);

@@ -100,4 +100,5 @@ internal readonly record struct WindowKeyEvent(
     WindowKey Key,
     bool Shift = false,
     bool Control = false,
+    bool Alt = false,
     bool IsRepeat = false);

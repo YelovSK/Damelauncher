@@ -37,6 +37,9 @@ internal sealed class ResultSearch : IDisposable
     /// </summary>
     internal event Action<IReadOnlyList<LaunchResult>>? ResultsChanged;
 
+    /// <summary>The ids of the providers left out of searches, from the next one on.</summary>
+    internal IReadOnlySet<string> DisabledProviders { get; set; } = new HashSet<string>();
+
     internal void Search(string query)
     {
         _query?.Cancel();
@@ -44,7 +47,8 @@ internal sealed class ResultSearch : IDisposable
         _query = null;
 
         query = query.Trim();
-        if (query.Length == 0)
+        int[] enabled = [.. Enumerable.Range(0, _providers.Length).Where(index => !DisabledProviders.Contains(_providers[index].Id))];
+        if (query.Length == 0 || enabled.Length == 0)
         {
             ResultsChanged?.Invoke([]);
             return;
@@ -53,8 +57,8 @@ internal sealed class ResultSearch : IDisposable
         // The previous results stay up until the new ones are complete, so typing doesn't flicker
         // through the partial results of whichever providers answer first.
         _query = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        var pending = new PendingQuery(_providers.Length);
-        for (int index = 0; index < _providers.Length; index++)
+        var pending = new PendingQuery(_providers.Length, enabled.Length);
+        foreach (int index in enabled)
         {
             _ = QueryProviderAsync(index, query, pending, _query.Token);
         }
@@ -154,11 +158,11 @@ internal sealed class ResultSearch : IDisposable
             .Take(MaxResults),
     ];
 
-    /// <summary>One query's answers so far, one slot per provider.</summary>
-    private sealed class PendingQuery(int providerCount)
+    /// <summary>One query's answers so far, one slot per provider, which stays empty for one that's disabled.</summary>
+    private sealed class PendingQuery(int providerCount, int askedCount)
     {
         internal IReadOnlyList<LaunchResult>?[] Answers { get; } = new IReadOnlyList<LaunchResult>?[providerCount];
-        internal int Unanswered { get; set; } = providerCount;
+        internal int Unanswered { get; set; } = askedCount;
         internal bool DeadlinePassed { get; set; }
     }
 }

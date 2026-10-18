@@ -14,6 +14,9 @@ internal interface IResultProvider
     /// <summary>A short name, unique among providers, that saved usage history refers to.</summary>
     public string Id { get; }
 
+    /// <summary>What the provider is called in the settings.</summary>
+    public string Name { get; }
+
     /// <summary>Prepares the provider, for example by indexing. Runs once, before its first query.</summary>
     public Task InitializeAsync(CancellationToken cancellationToken);
 

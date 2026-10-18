@@ -7,42 +7,49 @@ using Damelauncher.Plugins.Programs;
 using Damelauncher.Plugins.WindowsSettings;
 using Damelauncher.Rendering;
 using Damelauncher.Search;
+using Damelauncher.Settings;
 using Damelauncher.UI;
 
 namespace Damelauncher;
 
-internal sealed class LauncherApp : IDisposable
+internal sealed class LauncherApp : ISettingsActions, IDisposable
 {
+    private const string AppName = "Damelauncher";
     private const int ToggleHotKeyId = 1;
-    private const HotKeyModifiers ToggleModifiers = HotKeyModifiers.Alt | HotKeyModifiers.Shift;
-    private const WindowKey ToggleKey = WindowKey.Space;
 
+    private readonly SettingsService _settings;
     private readonly AppWindow _window;
     private readonly D2DRenderer _renderer;
     private readonly LauncherUi _ui;
+    private readonly IResultProvider[] _plugins;
     private readonly ResultSearch _search;
     private readonly TrayIcon _trayIcon;
+    private SettingsWindow? _settingsWindow;
+    private bool _hotKeyRegistered;
 
     internal LauncherApp()
     {
+        _settings = SettingsService.Load();
         _window = new AppWindow(
-            "Damelauncher",
+            AppName,
             (int)LauncherUi.WindowWidth,
             (int)LauncherUi.MaxWindowHeight,
             frame: AppWindowFrame.Popup);
         // Providers' awaits resume on the window thread, where the results are shown.
         SynchronizationContext.SetSynchronizationContext(new WindowSynchronizationContext(_window.Post));
         _renderer = new D2DRenderer(_window.Handle, _window.ClientWidth, _window.ClientHeight, _window.Dpi);
+        _window.FrameLatencyWaitHandle = () => _renderer.FrameLatencyWaitHandle;
         _ui = new LauncherUi(
             _renderer.DeviceContext,
             _renderer.DirectWriteFactory,
             _window.Dpi);
+        _plugins = [new ProgramsProvider(), new WindowsSettingsProvider(), new EverythingProvider()];
         _search = new ResultSearch(
             UsageHistory.Load(),
-            new ProgramsProvider(),
-            new WindowsSettingsProvider(),
-            new EverythingProvider(),
-            new LauncherCommandsProvider(_window.Close));
+            [.. _plugins, new LauncherCommandsProvider(OpenSettings, _window.Close)])
+        {
+            DisabledProviders = _settings.Current.DisabledPlugins,
+        };
         _ui.QueryChanged += _search.Search;
         _search.ResultsChanged += ShowResults;
         _ui.Invalidated += _window.RequestRepaint;
@@ -56,23 +63,86 @@ internal sealed class LauncherApp : IDisposable
         _window.PointerInput += HandlePointerInput;
         _window.HotKeyPressed += HandleHotKey;
         _window.Deactivated += _window.Hide;
-        _window.RegisterHotKey(ToggleHotKeyId, ToggleModifiers, ToggleKey);
+        RegisterHotKey(_settings.Current.HotKey);
         // Posted to the window, which reports a failure the way it does its own, instead of it
         // ending the process from the tray icon's window procedure.
         _trayIcon = new TrayIcon(
-            "Damelauncher",
+            AppName,
             () => _window.Post(Show),
             [
                 new TrayMenuItem("Open", () => _window.Post(Show)),
+                new TrayMenuItem("Settings", () => _window.Post(OpenSettings)),
                 new TrayMenuItem("Quit", () => _window.Post(_window.Close)),
             ]);
     }
 
+    LauncherSettings ISettingsActions.Settings => _settings.Current;
+
+    IReadOnlyList<IResultProvider> ISettingsActions.Plugins => _plugins;
+
+    bool ISettingsActions.IsHotKeyRegistered => _hotKeyRegistered;
+
+    bool ISettingsActions.StartsWithWindows
+    {
+        get => StartupRegistration.IsRegistered(AppName);
+        set
+        {
+            if (value)
+            {
+                StartupRegistration.Register(AppName, Environment.ProcessPath!);
+            }
+            else
+            {
+                StartupRegistration.Unregister(AppName);
+            }
+        }
+    }
+
     internal void Run()
     {
-        // Opens once at startup too, so launching it shows that it's running.
-        _window.Post(Show);
-        _window.Run(() => _renderer.FrameLatencyWaitHandle);
+        // Opens once at startup too, so launching it shows that it's running. Without its hotkey,
+        // the settings open instead, which say why and let another one be picked.
+        _window.Post(_hotKeyRegistered ? Show : OpenSettings);
+        _window.Run();
+    }
+
+    bool ISettingsActions.TrySetHotKey(HotKey hotKey)
+    {
+        if (!RegisterHotKey(hotKey))
+        {
+            return false;
+        }
+
+        _settings.Update(_settings.Current with { HotKey = hotKey });
+        return true;
+    }
+
+    void ISettingsActions.SuspendHotKey(bool suspended)
+    {
+        if (suspended)
+        {
+            UnregisterHotKey();
+        }
+        else if (!_hotKeyRegistered)
+        {
+            RegisterHotKey(_settings.Current.HotKey);
+        }
+    }
+
+    void ISettingsActions.SetPluginEnabled(string id, bool enabled)
+    {
+        var disabled = new HashSet<string>(_settings.Current.DisabledPlugins);
+        if (enabled)
+        {
+            disabled.Remove(id);
+        }
+        else
+        {
+            disabled.Add(id);
+        }
+
+        _settings.Update(_settings.Current with { DisabledPlugins = disabled });
+        _search.DisabledProviders = disabled;
     }
 
     public void Dispose()
@@ -90,6 +160,7 @@ internal sealed class LauncherApp : IDisposable
         _window.PointerInput -= HandlePointerInput;
         _window.HotKeyPressed -= HandleHotKey;
         _window.Deactivated -= _window.Hide;
+        _settingsWindow?.Dispose();
         _trayIcon.Dispose();
         _search.Dispose();
         _ui.Dispose();
@@ -104,6 +175,42 @@ internal sealed class LauncherApp : IDisposable
         _window.CenterOnCursorMonitor(LauncherUi.WindowWidth, LauncherUi.MaxWindowHeight);
         _window.SetSize(LauncherUi.WindowWidth, _ui.WindowHeight);
         _window.Show();
+    }
+
+    private void OpenSettings()
+    {
+        if (_settingsWindow is null)
+        {
+            _settingsWindow = new SettingsWindow(this);
+            // Posted, since the window is still being destroyed when it says it closed.
+            _settingsWindow.Closed += () => _window.Post(CloseSettings);
+        }
+
+        _settingsWindow.Show();
+    }
+
+    private void CloseSettings()
+    {
+        _settingsWindow?.Dispose();
+        _settingsWindow = null;
+        // Closing the window in the middle of recording a hotkey never resumes the current one.
+        if (!_hotKeyRegistered)
+        {
+            RegisterHotKey(_settings.Current.HotKey);
+        }
+    }
+
+    private bool RegisterHotKey(HotKey hotKey)
+    {
+        UnregisterHotKey();
+        _hotKeyRegistered = _window.TryRegisterHotKey(ToggleHotKeyId, hotKey.Modifiers, hotKey.Key);
+        return _hotKeyRegistered;
+    }
+
+    private void UnregisterHotKey()
+    {
+        _window.UnregisterHotKey(ToggleHotKeyId);
+        _hotKeyRegistered = false;
     }
 
     private void ShowResults(IReadOnlyList<LaunchResult> results)

@@ -14,6 +14,8 @@ internal sealed class EverythingProvider : IResultProvider, IDisposable
 
     public string Id => "everything";
 
+    public string Name => "Everything";
+
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public async ValueTask<IReadOnlyList<LaunchResult>> QueryAsync(string query, CancellationToken cancellationToken)

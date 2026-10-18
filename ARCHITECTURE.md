@@ -22,6 +22,14 @@ Damelauncher -> Dame.UI -> Dame.Win32
 
 Rendering is demand-driven, as in Dameview: input and state changes request frames, and nothing renders while nothing changes.
 
+Each window has its own `AppWindow` and `D2DRenderer`, all on one thread. The launcher's window runs the message loop, which serves every window: between messages, it waits for input together with the swap chain of each window that wants a frame, and renders whichever is ready. Frames never render inside a message, so animating can't hold up input. Closing any window but the launcher's leaves the loop running.
+
+## Settings
+
+`SettingsService` reads `%LocalAppData%\Damelauncher\settings.ini` once at startup and writes it on every change, keeping comments and keys it doesn't know. It holds the hotkey and the disabled plugins. Starting with Windows is read straight from the registry's Run key instead, which is the record of it.
+
+`SettingsWindow` opens from the tray menu or the "Damelauncher Settings" result and is rebuilt each time. Its `SettingsUi` changes nothing itself: it asks `LauncherApp` through `ISettingsActions`, which applies and saves each change at once. A new hotkey only replaces the old one once it registers, since another app may hold it, and while one is being recorded the current one is released, so pressing it reaches the settings window. When the hotkey can't be registered at startup, the settings open instead of the launcher, saying why.
+
 ## Plugins
 
 A plugin is an `IResultProvider`. `ResultSearch` initializes every provider once at startup, then sends each query to all of them. A new query cancels the previous one. Results merge by score as each provider answers, so a slow provider doesn't hold back a fast one, and the previous results stay on screen until the first answer to a new query arrives.

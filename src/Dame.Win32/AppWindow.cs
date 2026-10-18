@@ -17,6 +17,8 @@ namespace Dame.Win32;
 internal sealed unsafe class AppWindow : IDisposable
 {
     internal static readonly string WindowClassName = typeof(AppWindow).FullName!;
+    // Every window on the thread, which the one running the loop renders along with itself.
+    private static readonly List<AppWindow> OpenWindows = [];
     private static bool _windowClassRegistered;
 
     private readonly ConcurrentQueue<Action> _postedActions = new();
@@ -25,8 +27,10 @@ internal sealed unsafe class AppWindow : IDisposable
     private readonly List<int> _hotKeyIds = [];
     private Timer? _repaintTimer;
     private GCHandle _selfHandle;
-    private Exception? _unhandledException;
+    // Shared by every window on the thread, since one loop runs them all and reports the failure.
+    private static Exception? _unhandledException;
     private bool _frameRequested;
+    private bool _runsLoop;
     private bool _trackingMouseLeave;
     private bool _maximized;
     private WINDOWPLACEMENT? _windowedPlacement;
@@ -69,6 +73,8 @@ internal sealed unsafe class AppWindow : IDisposable
             throw NativeMethods.CreateLastErrorException("Could not create the main window.");
         }
 
+        OpenWindows.Add(this);
+
         UpdateClientSize();
         Dpi = GetDpiForWindow((HWND)Handle);
         if (frame == AppWindowFrame.Popup)
@@ -93,10 +99,19 @@ internal sealed unsafe class AppWindow : IDisposable
     internal event Action<nuint, string>? CopyDataReceived;
     internal event Action<bool>? MaximizedChanged;
     internal event Action? Deactivated;
+    /// <summary>The window was destroyed, by the user closing it or by <see cref="Close"/>.</summary>
+    internal event Action? Closed;
     /// <summary>A hotkey registered with <see cref="RegisterHotKey"/> was pressed, anywhere in the system.</summary>
     internal event Action<int>? HotKeyPressed;
 
     internal nint Handle { get; private set; }
+
+    /// <summary>
+    /// The swap chain's signal that it's ready for another frame, which the loop waits for
+    /// before rendering a requested one. Asked for on every wait, since it changes with the swap
+    /// chain. Without one, a requested frame renders as soon as the loop gets to it.
+    /// </summary>
+    internal Func<nint>? FrameLatencyWaitHandle { get; set; }
     internal bool IsVisible => Handle != 0 && IsWindowVisible((HWND)Handle);
     internal int ClientWidth { get; private set; }
     internal int ClientHeight { get; private set; }
@@ -306,19 +321,29 @@ internal sealed unsafe class AppWindow : IDisposable
     }
 
     /// <summary>Registers a system-wide hotkey, which raises <see cref="HotKeyPressed"/> with its id.</summary>
-    internal void RegisterHotKey(int id, HotKeyModifiers modifiers, WindowKey key)
+    /// <returns>Whether it was registered, which it isn't when another app already has it.</returns>
+    internal bool TryRegisterHotKey(int id, HotKeyModifiers modifiers, WindowKey key)
     {
         // Without NOREPEAT, holding the keys down would keep firing the hotkey.
-        if (!Windows.Win32.PInvoke.RegisterHotKey(
+        if (!RegisterHotKey(
             (HWND)Handle,
             id,
             (HOT_KEY_MODIFIERS)modifiers | HOT_KEY_MODIFIERS.MOD_NOREPEAT,
             (uint)key))
         {
-            throw NativeMethods.CreateLastErrorException("Could not register the hotkey.");
+            return false;
         }
 
         _hotKeyIds.Add(id);
+        return true;
+    }
+
+    internal void UnregisterHotKey(int id)
+    {
+        if (_hotKeyIds.Remove(id))
+        {
+            _ = Windows.Win32.PInvoke.UnregisterHotKey((HWND)Handle, id);
+        }
     }
 
     internal void Close()
@@ -552,9 +577,17 @@ internal sealed unsafe class AppWindow : IDisposable
         _ = PostMessage((HWND)window, NativeMethods.MessageDispatch, 0, 0);
     }
 
-    /// <param name="frameLatencyWaitHandle">Asked for on every wait, since it changes with the swap chain.</param>
-    internal void Run(Func<nint> frameLatencyWaitHandle)
+    /// <summary>
+    /// Runs the thread's message loop until this window is destroyed. Other windows on the
+    /// thread need no loop of their own and can come and go meanwhile; the loop renders them too.
+    /// </summary>
+    /// <remarks>
+    /// Frames render between messages, never inside one, so a running animation can't keep input
+    /// waiting: posted messages, like a request for the next frame, come before input otherwise.
+    /// </remarks>
+    internal void Run()
     {
+        _runsLoop = true;
         RequestRepaint();
         RenderRequestedFrame();
         ShowWindow((HWND)Handle, _initialShowCommand);
@@ -563,6 +596,8 @@ internal sealed unsafe class AppWindow : IDisposable
         // Registering initializes OLE, which the first frame shouldn't wait for.
         RegisterFileDropTarget();
 
+        var waiting = new List<AppWindow>();
+        nint[] handles = [];
         bool quit = false;
         while (!quit)
         {
@@ -583,17 +618,42 @@ internal sealed unsafe class AppWindow : IDisposable
                 break;
             }
 
-            WAIT_EVENT waitResult = NativeMethods.WaitForMessageOrHandle(
-                frameLatencyWaitHandle(),
-                _frameRequested);
+            waiting.Clear();
+            // By index, since rendering can fail and destroy a window, which leaves the list.
+            for (int index = 0; index < OpenWindows.Count; index++)
+            {
+                AppWindow window = OpenWindows[index];
+                if (!window._frameRequested)
+                {
+                    continue;
+                }
+
+                nint handle = window.FrameLatencyWaitHandle?.Invoke() ?? 0;
+                if (handle == 0)
+                {
+                    window.RenderRequestedFrame();
+                    continue;
+                }
+
+                if (handles.Length == waiting.Count)
+                {
+                    Array.Resize(ref handles, waiting.Count + 1);
+                }
+
+                handles[waiting.Count] = handle;
+                waiting.Add(window);
+            }
+
+            WAIT_EVENT waitResult = NativeMethods.WaitForMessageOrHandles(handles.AsSpan(0, waiting.Count));
             if (waitResult == WAIT_EVENT.WAIT_FAILED)
             {
                 throw NativeMethods.CreateLastErrorException("Could not wait for a window message or frame.");
             }
 
-            if (_frameRequested && waitResult == WAIT_EVENT.WAIT_OBJECT_0)
+            int ready = (int)(waitResult - WAIT_EVENT.WAIT_OBJECT_0);
+            if (ready >= 0 && ready < waiting.Count)
             {
-                RenderRequestedFrame();
+                waiting[ready].RenderRequestedFrame();
             }
         }
 
@@ -747,7 +807,7 @@ internal sealed unsafe class AppWindow : IDisposable
         }
         catch (Exception exception)
         {
-            appWindow._unhandledException ??= exception;
+            _unhandledException ??= exception;
             DestroyWindow(window);
             // Destroying the window normally ends the loop, but not when the failure
             // happened while the window was being destroyed.
@@ -784,6 +844,7 @@ internal sealed unsafe class AppWindow : IDisposable
                 _frameRequested = true;
                 return default;
 
+            // Only wakes the loop, which renders the frame.
             case NativeMethods.MessageRenderFrame:
                 return default;
 
@@ -818,13 +879,19 @@ internal sealed unsafe class AppWindow : IDisposable
                 ApplyCursor(_cursor);
                 return (LRESULT)1;
 
+            // Keys pressed with Alt arrive as system keys, which are the app's too, except for
+            // Alt+F4 still closing the window.
             case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
                 KeyPressed?.Invoke(new WindowKeyEvent(
                     (WindowKey)(nuint)wParam,
                     GetKeyState((int)VIRTUAL_KEY.VK_SHIFT) < 0,
                     GetKeyState((int)VIRTUAL_KEY.VK_CONTROL) < 0,
+                    GetKeyState((int)VIRTUAL_KEY.VK_MENU) < 0,
                     IsRepeat: (((long)lParam >> 16) & KF_REPEAT) != 0));
-                return default;
+                return message == WM_SYSKEYDOWN && (WindowKey)(nuint)wParam == WindowKey.F4
+                    ? DefWindowProc(window, message, wParam, lParam)
+                    : default;
 
             case WM_CHAR:
                 if (_textInputDecoder.Push((char)(nuint)wParam) is { } text)
@@ -1005,7 +1072,7 @@ internal sealed unsafe class AppWindow : IDisposable
 
                 foreach (int id in _hotKeyIds)
                 {
-                    UnregisterHotKey(window, id);
+                    Windows.Win32.PInvoke.UnregisterHotKey(window, id);
                 }
 
                 _hotKeyIds.Clear();
@@ -1013,7 +1080,13 @@ internal sealed unsafe class AppWindow : IDisposable
                 Handle = 0;
                 _frameRequested = false;
                 _postedActions.Clear();
-                NativeMethods.RequestMessageLoopExit();
+                OpenWindows.Remove(this);
+                if (_runsLoop)
+                {
+                    NativeMethods.RequestMessageLoopExit();
+                }
+
+                Closed?.Invoke();
                 return default;
 
             default:

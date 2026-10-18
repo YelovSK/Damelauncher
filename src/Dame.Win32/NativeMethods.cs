@@ -94,16 +94,18 @@ internal static unsafe partial class NativeMethods
         return [.. paths];
     }
 
-    internal static unsafe WAIT_EVENT WaitForMessageOrHandle(nint handle, bool includeHandle)
+    /// <returns><c>WAIT_OBJECT_0</c> plus the index of a signaled handle, or past them for a message.</returns>
+    internal static unsafe WAIT_EVENT WaitForMessageOrHandles(ReadOnlySpan<nint> handles)
     {
-        var h = (HANDLE)handle;
-        HANDLE* handles = includeHandle ? &h : null;
-        return MsgWaitForMultipleObjectsEx(
-            includeHandle ? 1u : 0u,
-            handles,
-            INFINITE,
-            QUEUE_STATUS_FLAGS.QS_ALLINPUT,
-            MSG_WAIT_FOR_MULTIPLE_OBJECTS_EX_FLAGS.MWMO_INPUTAVAILABLE);
+        fixed (nint* waitHandles = handles)
+        {
+            return MsgWaitForMultipleObjectsEx(
+                (uint)handles.Length,
+                (HANDLE*)waitHandles,
+                INFINITE,
+                QUEUE_STATUS_FLAGS.QS_ALLINPUT,
+                MSG_WAIT_FOR_MULTIPLE_OBJECTS_EX_FLAGS.MWMO_INPUTAVAILABLE);
+        }
     }
 
     internal static void SetDwmWindowAttribute(HWND window, DWMWINDOWATTRIBUTE attribute, int value)
