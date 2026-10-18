@@ -22,6 +22,9 @@ internal interface ISettingsActions
 
     public bool OpensWithWindowsKey { get; set; }
 
+    /// <summary>Whether this is the installed copy, rather than one run from wherever it was downloaded to.</summary>
+    public bool IsInstalled { get; }
+
     /// <returns>Whether the hotkey could be registered. When it couldn't, the previous one stays.</returns>
     public bool TrySetHotKey(HotKey hotKey);
 
@@ -30,6 +33,9 @@ internal interface ISettingsActions
     /// the settings window instead of toggling the launcher.
     /// </summary>
     public void SuspendHotKey(bool suspended);
+
+    /// <summary>Installs this copy and switches to the installed one, or says why it couldn't.</summary>
+    public void Install();
 
     public void SetPlugin(IResultProvider plugin, PluginSettings settings);
 }

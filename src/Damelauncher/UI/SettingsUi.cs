@@ -51,7 +51,12 @@ internal sealed class SettingsUi : UiElement, IDisposable
             ShowHotKeyError(actions.Settings.HotKey);
         }
 
+        StackPanel install = Described(
+            new Button("Install", actions.Install) { HorizontalAlignment = UiAlignment.Start },
+            "This copy isn't installed. Installing gives it a place of its own, in Start and installed apps, and starts it with Windows.");
+        install.IsVisible = !actions.IsInstalled;
         ScrollView general = Page(
+            install,
             new SettingsRow(
                 "Theme",
                 new Dropdown<ThemeId>(

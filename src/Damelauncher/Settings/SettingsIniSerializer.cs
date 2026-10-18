@@ -17,6 +17,7 @@ internal static class SettingsIniSerializer
             s => s.HotKey,
             (s, value) => s with { HotKey = value }),
         Binding.Bool(Root, "windowsKey", s => s.OpenWithWindowsKey, (s, value) => s with { OpenWithWindowsKey = value }),
+        Binding.Bool(Root, "offerInstall", s => s.OfferInstall, (s, value) => s with { OfferInstall = value }),
         Binding.Enum(Root, "theme", s => s.Theme, (s, value) => s with { Theme = value }),
         Binding.Int(
             Root,

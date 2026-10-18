@@ -354,6 +354,50 @@ internal sealed unsafe class AppWindow : IDisposable
         }
     }
 
+    /// <summary>
+    /// Asks the windows with this title in other processes of this app to close, and waits for
+    /// those processes to exit, such as before replacing the app's executable.
+    /// </summary>
+    /// <returns>Whether they all exited in time.</returns>
+    internal static bool CloseInOtherProcesses(string title, TimeSpan timeout)
+    {
+        var processes = new List<System.Diagnostics.Process>();
+        HWND window = default;
+        fixed (char* className = WindowClassName)
+        fixed (char* windowTitle = title)
+        {
+            while (!(window = FindWindowEx(default, window, className, windowTitle)).IsNull)
+            {
+                if (GetWindowThreadProcessId(window, out uint processId) == 0
+                    || processId == Environment.ProcessId
+                    || !PostMessage(window, WM_CLOSE, default, default))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    processes.Add(System.Diagnostics.Process.GetProcessById((int)processId));
+                }
+                catch (ArgumentException)
+                {
+                    // It exited already.
+                }
+            }
+        }
+
+        bool exited = true;
+        foreach (System.Diagnostics.Process process in processes)
+        {
+            using (process)
+            {
+                exited &= process.WaitForExit(timeout);
+            }
+        }
+
+        return exited;
+    }
+
     internal bool Activate()
     {
         if (Handle != 0)

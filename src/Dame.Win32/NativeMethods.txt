@@ -4,6 +4,7 @@ RegisterClassEx
 DefWindowProc
 DestroyWindow
 FindWindow
+FindWindowEx
 SendMessage
 ShowWindow
 IsIconic
@@ -246,6 +247,7 @@ WM_MOUSEWHEEL
 WM_CAPTURECHANGED
 WM_DPICHANGED
 WM_DESTROY
+WM_CLOSE
 WM_APP
 WM_COPYDATA
 WM_ACTIVATE

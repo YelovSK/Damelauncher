@@ -12,6 +12,9 @@ internal sealed record LauncherSettings
     /// <summary>Whether tapping the Windows key on its own opens the launcher too, instead of Start.</summary>
     public bool OpenWithWindowsKey { get; init; }
 
+    /// <summary>Whether running a copy that isn't installed asks to install it, until the user declines once.</summary>
+    public bool OfferInstall { get; init; } = true;
+
     /// <summary>How many results are shown at most, from all plugins together.</summary>
     public int MaxResults { get; init; } = 50;
 

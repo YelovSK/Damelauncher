@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Dame.Win32;
 using Dame.Win32.Input;
+using Damelauncher.Installation;
 using Damelauncher.Plugins;
 using Damelauncher.Plugins.Everything;
 using Damelauncher.Plugins.Programs;
@@ -14,7 +15,7 @@ namespace Damelauncher;
 
 internal sealed class LauncherApp : ISettingsActions, IDisposable
 {
-    private const string AppName = "Damelauncher";
+    internal const string AppName = "Damelauncher";
     private const int ToggleHotKeyId = 1;
 
     private readonly SettingsService _settings;
@@ -28,9 +29,9 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
     private WindowsKeyTap? _windowsKeyTap;
     private bool _hotKeyRegistered;
 
-    internal LauncherApp()
+    internal LauncherApp(SettingsService settings)
     {
-        _settings = SettingsService.Load();
+        _settings = settings;
         _window = new AppWindow(
             AppName,
             (int)LauncherUi.WindowWidth,
@@ -126,6 +127,8 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         }
     }
 
+    bool ISettingsActions.IsInstalled => AppInstallation.IsRunningInstalled;
+
     bool ISettingsActions.OpensWithWindowsKey
     {
         get => _settings.Current.OpenWithWindowsKey;
@@ -164,6 +167,20 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         else if (!_hotKeyRegistered)
         {
             RegisterHotKey(_settings.Current.HotKey);
+        }
+    }
+
+    void ISettingsActions.Install()
+    {
+        if (AppInstallation.TryInstall())
+        {
+            // Posted rather than closing from the settings window's input. Closed before the
+            // installed copy starts, so that one can register the hotkey this one holds.
+            _window.Post(() =>
+            {
+                _window.Close();
+                AppInstallation.LaunchInstalled();
+            });
         }
     }
 

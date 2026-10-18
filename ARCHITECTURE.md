@@ -32,7 +32,12 @@ Each window has its own `AppWindow` and `D2DRenderer`, all on one thread. The la
 
 Tapping the Windows key can open the launcher too, as a separate setting next to the hotkey, since the system can't register a modifier on its own as a hotkey. `WindowsKeyTap` watches every key through a low-level keyboard hook, and when Windows is pressed and released with nothing in between, it sends an unassigned key before the release, so the shell takes the tap for a combination and leaves Start closed. The hook runs on the window thread's message loop and only posts the tap, since Windows removes a hook that keeps the keyboard waiting.
 
-## Plugins
+## Installation
+
+The executable installs itself for the current user, so it needs no installer or administrator rights. `AppInstallation` copies it to `%LocalAppData%\Programs\Damelauncher`, adds a Start menu shortcut, an entry in installed apps whose uninstall command runs the installed executable with `--uninstall`, and the Run key entry. A copy started from anywhere else asks once whether to install, before the launcher starts; declining is saved in the settings, and the settings window offers it again. When a copy is installed already, it always asks, as that's an update. Debug builds never ask.
+
+Only one copy can hold the hotkey, so installing and uninstalling first close every other running copy, through `AppWindow.CloseInOtherProcesses`, which finds their launcher windows by class and title, and wait for them to exit. The installed copy starts only after the current one has closed its window. Uninstalling leaves the settings and history, and a command deletes the executable once the process has exited, since a running executable can't delete itself.
+
 
 A plugin is an `IResultProvider`. `ResultSearch` initializes every provider once at startup, then sends each query to the providers its `ProviderRouting` lets through. A query starting with a provider's keyword and a space goes only to that provider, without the keyword; any other query goes to every enabled provider included in normal searches. Each plugin suggests a default keyword, which its settings can change or clear. How many results show is limited overall and, optionally, per provider: `ResultSearch` keeps each provider's best within its limit, counting launch history, then the best of those overall, and tells each provider its limit so one that fetches from elsewhere can ask for less. A new query cancels the previous one. Results merge by score as each provider answers, so a slow provider doesn't hold back a fast one, and the previous results stay on screen until the first answer to a new query arrives.
 

@@ -16,6 +16,7 @@
   - Settings pages and power commands (lock, sleep, sign out, shut down, restart)
   - Files and folders through [Everything](https://www.voidtools.com/)
 - Icons for every result
+- Installs itself for the current user when run from elsewhere, no admin needed
 - Tray icon
 - Settings window with the hotkey, plugins, start with Windows, and color themes
 
