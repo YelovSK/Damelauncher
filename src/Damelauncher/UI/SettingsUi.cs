@@ -19,6 +19,7 @@ internal sealed class SettingsUi : UiElement, IDisposable
     private readonly ISettingsActions _actions;
     private readonly HotKeyChip _hotKeyChip;
     private readonly TextBlock _hotKeyError;
+    private readonly PopupHost _popupHost = new();
 
     internal SettingsUi(
         ID2D1DeviceContext deviceContext,
@@ -26,7 +27,7 @@ internal sealed class SettingsUi : UiElement, IDisposable
         float dpi,
         ISettingsActions actions)
     {
-        _host = new UiHost(this, deviceContext, directWriteFactory, dpi, Themes.Dark);
+        _host = new UiHost(this, deviceContext, directWriteFactory, dpi, Themes.Get(actions.Settings.Theme).Palette);
         _actions = actions;
         _hotKeyChip = new HotKeyChip(actions.Settings.HotKey, RecordHotKey, actions.SuspendHotKey)
         {
@@ -41,8 +42,16 @@ internal sealed class SettingsUi : UiElement, IDisposable
             ShowHotKeyError(actions.Settings.HotKey);
         }
 
+        var theme = new SettingsRow(
+            "Theme",
+            new Dropdown<ThemeId>(
+                _popupHost,
+                [.. Themes.All.Select(option => new Choice<ThemeId>(option.DisplayName, option.Id))],
+                actions.Settings.Theme,
+                value => actions.Theme = value));
         var general = new SettingsGroup(
             "General",
+            theme,
             new SettingsRow(
                 "Hotkey",
                 new StackPanel(UiOrientation.Vertical, _hotKeyChip, _hotKeyError) { Spacing = UiDesign.SmallSpacing }),
@@ -68,6 +77,8 @@ internal sealed class SettingsUi : UiElement, IDisposable
             Spacing = UiDesign.LargeSpacing * 1.5f,
             Margin = new UiThickness(24.0f),
         }));
+        // Above the settings, where the theme list opens.
+        AddChild(_popupHost);
         _host.Root.SetFocus(_hotKeyChip);
     }
 
@@ -83,7 +94,15 @@ internal sealed class SettingsUi : UiElement, IDisposable
         remove => _host.Root.CursorChanged -= value;
     }
 
-    internal UiTheme Palette => _host.Palette;
+    internal UiTheme Palette
+    {
+        get => _host.Palette;
+        set
+        {
+            _host.Palette = value;
+            _host.Root.InvalidateVisual();
+        }
+    }
 
     /// <summary>Sends a key to whatever is recording it first, then to the focused setting.</summary>
     internal bool HandleKey(WindowKeyEvent input) =>

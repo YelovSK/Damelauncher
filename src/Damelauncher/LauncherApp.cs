@@ -43,7 +43,8 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _ui = new LauncherUi(
             _renderer.DeviceContext,
             _renderer.DirectWriteFactory,
-            _window.Dpi);
+            _window.Dpi,
+            Themes.Get(_settings.Current.Theme).Palette);
         _plugins = [new ProgramsProvider(), new WindowsSettingsProvider(), new EverythingProvider()];
         _search = new ResultSearch(
             UsageHistory.Load(),
@@ -79,6 +80,17 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
     }
 
     LauncherSettings ISettingsActions.Settings => _settings.Current;
+
+    ThemeId ISettingsActions.Theme
+    {
+        set
+        {
+            _settings.Update(_settings.Current with { Theme = value });
+            Theme theme = Themes.Get(value);
+            _ui.Palette = theme.Palette;
+            _settingsWindow?.ApplyTheme(theme);
+        }
+    }
 
     IReadOnlyList<IResultProvider> ISettingsActions.Plugins => _plugins;
 
@@ -319,7 +331,8 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
     private void HandleRenderFrame()
     {
         bool animationContinues = _ui.Update();
-        _renderer.Render(_ui.DrawFrame, _ui.Palette.Background);
+        // The launcher is one floating panel, so it has a surface's color rather than a window's.
+        _renderer.Render(_ui.DrawFrame, _ui.Palette.Surface);
         if (animationContinues)
         {
             _window.RequestRepaint();

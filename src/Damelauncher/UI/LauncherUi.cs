@@ -25,10 +25,11 @@ internal sealed class LauncherUi : UiElement, IDisposable
     internal LauncherUi(
         ID2D1DeviceContext deviceContext,
         IDWriteFactory directWriteFactory,
-        float dpi)
+        float dpi,
+        UiTheme palette)
     {
-        _host = new UiHost(this, deviceContext, directWriteFactory, dpi, Themes.Dark);
-        _query = new TextInput("Search");
+        _host = new UiHost(this, deviceContext, directWriteFactory, dpi, palette);
+        _query = new TextInput("Search") { HighlightsFocus = false };
         _icons = new ResultIcons(deviceContext, dpi, _host.Root.InvalidateVisual);
         _results = new ResultList(_icons);
         _resultsView = new ScrollView(_results) { IsVisible = false };
@@ -66,7 +67,15 @@ internal sealed class LauncherUi : UiElement, IDisposable
         remove => _results.ResultInvoked -= value;
     }
 
-    internal UiTheme Palette => _host.Palette;
+    internal UiTheme Palette
+    {
+        get => _host.Palette;
+        set
+        {
+            _host.Palette = value;
+            _host.Root.InvalidateVisual();
+        }
+    }
 
     internal static float MaxWindowHeight => GetWindowHeight(MaxVisibleRows);
 

@@ -2,6 +2,8 @@ namespace Damelauncher.Settings;
 
 internal sealed record LauncherSettings
 {
+    public ThemeId Theme { get; init; } = ThemeId.Dark;
+
     public HotKey HotKey { get; init; } = HotKey.Default;
 
     /// <summary>Whether tapping the Windows key on its own opens the launcher too, instead of Start.</summary>

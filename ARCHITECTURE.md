@@ -26,7 +26,7 @@ Each window has its own `AppWindow` and `D2DRenderer`, all on one thread. The la
 
 ## Settings
 
-`SettingsService` reads `%LocalAppData%\Damelauncher\settings.ini` once at startup and writes it on every change, keeping comments and keys it doesn't know. It holds the hotkey and the disabled plugins. Starting with Windows is read straight from the registry's Run key instead, which is the record of it.
+`SettingsService` reads `%LocalAppData%\Damelauncher\settings.ini` once at startup and writes it on every change, keeping comments and keys it doesn't know. It holds the theme, the hotkey and the disabled plugins. The themes are Dameview's, and a change of theme applies to every open window at once. Starting with Windows is read straight from the registry's Run key instead, which is the record of it.
 
 `SettingsWindow` opens from the tray menu or the "Damelauncher Settings" result and is rebuilt each time. Its `SettingsUi` changes nothing itself: it asks `LauncherApp` through `ISettingsActions`, which applies and saves each change at once. A new hotkey only replaces the old one once it registers, since another app may hold it, and while one is being recorded the current one is released, so pressing it reaches the settings window. When the hotkey can't be registered at startup, the settings open instead of the launcher, saying why.
 

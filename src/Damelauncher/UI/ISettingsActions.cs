@@ -8,6 +8,8 @@ internal interface ISettingsActions
 {
     public LauncherSettings Settings { get; }
 
+    public ThemeId Theme { set; }
+
     /// <summary>The plugins that can be turned off.</summary>
     public IReadOnlyList<IResultProvider> Plugins { get; }
 

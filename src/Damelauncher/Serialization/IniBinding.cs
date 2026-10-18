@@ -8,6 +8,21 @@ internal abstract class IniBinding<TModel>
 
     internal abstract void Write(IniDocument document, TModel model);
 
+    internal static IniKeyBinding<TModel, bool> Bool(
+        string section,
+        string key,
+        Func<TModel, bool> get,
+        Func<TModel, bool, TModel> set) =>
+        new(section, key, IniValue.ParseBool, IniValue.FormatBool, get, set);
+
+    internal static IniKeyBinding<TModel, T> Enum<T>(
+        string section,
+        string key,
+        Func<TModel, T> get,
+        Func<TModel, T, TModel> set)
+        where T : struct, System.Enum =>
+        new(section, key, IniValue.ParseEnum<T>, IniValue.FormatEnum, get, set);
+
     // For values that don't fit one key, like a whole section or a variable set of keys.
     internal static IniBinding<TModel> Custom(
         Func<IniDocument, TModel, List<string>, TModel> read,

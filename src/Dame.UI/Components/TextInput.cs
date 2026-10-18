@@ -62,6 +62,12 @@ internal sealed class TextInput : UiElement
     }
 
     internal string Placeholder { get; }
+
+    /// <summary>
+    /// Whether the border takes the accent color while the input has focus. One that always
+    /// has it, such as a launcher's search box, is calmer without.
+    /// </summary>
+    internal bool HighlightsFocus { get; init; } = true;
     internal int CaretIndex { get; private set; }
     internal int SelectionStart => Math.Min(_anchor, CaretIndex);
     internal int SelectionEnd => Math.Max(_anchor, CaretIndex);
@@ -192,7 +198,7 @@ internal sealed class TextInput : UiElement
         context.FillRoundedRectangle(background, context.Palette.ControlSurface);
         context.DrawRoundedRectangle(
             background,
-            focused ? context.Palette.Accent : context.Palette.SurfaceBorder);
+            focused && HighlightsFocus ? context.Palette.Accent : context.Palette.SurfaceBorder);
 
         float contentWidth = ContentWidth;
         float caretPosition = _caretHead.Current;

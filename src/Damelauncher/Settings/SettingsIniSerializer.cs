@@ -16,18 +16,8 @@ internal static class SettingsIniSerializer
             hotKey => hotKey.Text,
             s => s.HotKey,
             (s, value) => s with { HotKey = value }),
-        new IniKeyBinding<LauncherSettings, bool>(
-            Root,
-            "windowsKey",
-            text => text switch
-            {
-                "true" => true,
-                "false" => false,
-                _ => null,
-            },
-            value => value ? "true" : "false",
-            s => s.OpenWithWindowsKey,
-            (s, value) => s with { OpenWithWindowsKey = value }),
+        Binding.Bool(Root, "windowsKey", s => s.OpenWithWindowsKey, (s, value) => s with { OpenWithWindowsKey = value }),
+        Binding.Enum(Root, "theme", s => s.Theme, (s, value) => s with { Theme = value }),
         Binding.Custom(
             (document, s, _) => document.Get(Root, "disabledPlugins") is { } text
                 ? s with { DisabledPlugins = text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToHashSet() }

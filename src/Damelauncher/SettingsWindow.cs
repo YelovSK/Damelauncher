@@ -1,6 +1,7 @@
 using Dame.Win32;
 using Dame.Win32.Input;
 using Damelauncher.Rendering;
+using Damelauncher.Settings;
 using Damelauncher.UI;
 
 namespace Damelauncher;
@@ -19,10 +20,10 @@ internal sealed class SettingsWindow : IDisposable
             (int)SettingsUi.WindowWidth,
             (int)SettingsUi.WindowHeight);
         _window.CenterOnCursorMonitor(SettingsUi.WindowWidth, SettingsUi.WindowHeight);
-        _window.SetTitleBarTheme(dark: true, Themes.Dark.WindowCaptionColor, Themes.Dark.WindowTextColor);
         _renderer = new D2DRenderer(_window.Handle, _window.ClientWidth, _window.ClientHeight, _window.Dpi);
         _window.FrameLatencyWaitHandle = () => _renderer.FrameLatencyWaitHandle;
         _ui = new SettingsUi(_renderer.DeviceContext, _renderer.DirectWriteFactory, _window.Dpi, actions);
+        ApplyTitleBarTheme(Themes.Get(actions.Settings.Theme));
         _ui.Invalidated += _window.RequestRepaint;
         _ui.CursorChanged += _window.ApplyCursor;
         _window.RenderFrame += HandleRenderFrame;
@@ -43,6 +44,12 @@ internal sealed class SettingsWindow : IDisposable
         _ = _window.Activate();
     }
 
+    internal void ApplyTheme(Theme theme)
+    {
+        _ui.Palette = theme.Palette;
+        ApplyTitleBarTheme(theme);
+    }
+
     public void Dispose()
     {
         _ui.Invalidated -= _window.RequestRepaint;
@@ -59,6 +66,9 @@ internal sealed class SettingsWindow : IDisposable
     }
 
     private void HandleClosed() => Closed?.Invoke();
+
+    private void ApplyTitleBarTheme(Theme theme) =>
+        _window.SetTitleBarTheme(theme.IsDark, theme.Palette.WindowCaptionColor, theme.Palette.WindowTextColor);
 
     private void HandleKeyPress(WindowKeyEvent input)
     {
