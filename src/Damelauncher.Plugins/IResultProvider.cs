@@ -7,6 +7,7 @@ namespace Damelauncher.Plugins;
 /// <remarks>
 /// Both methods are called on the window thread, where awaits also resume. A provider that
 /// needs more than a moment, to index or to ask another process, does that work elsewhere.
+/// The launcher disposes a provider that is <see cref="IDisposable"/> when it exits.
 /// </remarks>
 internal interface IResultProvider
 {

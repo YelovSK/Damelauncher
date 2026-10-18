@@ -23,6 +23,7 @@
     <InternalsVisibleTo Include="Dame.UI" />
     <InternalsVisibleTo Include="Damelauncher.Plugins.Programs" />
     <InternalsVisibleTo Include="Damelauncher.Plugins.WindowsSettings" />
+    <InternalsVisibleTo Include="Damelauncher.Plugins.Everything" />
   </ItemGroup>
 
 </Project>

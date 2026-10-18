@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Dame.Win32;
 using Dame.Win32.Input;
 using Damelauncher.Plugins;
+using Damelauncher.Plugins.Everything;
 using Damelauncher.Plugins.Programs;
 using Damelauncher.Plugins.WindowsSettings;
 using Damelauncher.Rendering;
@@ -38,6 +39,7 @@ internal sealed class LauncherApp : IDisposable
         _search = new ResultSearch(
             new ProgramsProvider(),
             new WindowsSettingsProvider(),
+            new EverythingProvider(),
             new LauncherCommandsProvider(_window.Close));
         _ui.QueryChanged += _search.Search;
         _search.ResultsChanged += _ui.SetResults;

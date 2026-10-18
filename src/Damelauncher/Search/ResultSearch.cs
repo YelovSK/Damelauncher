@@ -50,6 +50,10 @@ internal sealed class ResultSearch : IDisposable
         _lifetime.Cancel();
         _query?.Dispose();
         _lifetime.Dispose();
+        foreach (IResultProvider provider in _providers)
+        {
+            (provider as IDisposable)?.Dispose();
+        }
     }
 
     private async Task QueryProviderAsync(

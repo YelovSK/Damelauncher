@@ -14,25 +14,45 @@ internal static unsafe class WindowCopyData
         internal nint DataPointer;
     }
 
+    /// <summary>Sends text to a window of this app, which may then take the foreground.</summary>
     internal static bool TrySend(string windowClassName, nuint dataId, string payload)
     {
-        fixed (char* className = windowClassName)
-        fixed (char* text = payload)
+        HWND window = Find(windowClassName);
+        if (window.IsNull)
         {
-            HWND window = FindWindow(className, default);
-            if (window.IsNull)
-            {
-                return false;
-            }
+            return false;
+        }
 
+        _ = GetWindowThreadProcessId(window, out uint processId) != 0
+            && AllowSetForegroundWindow(processId);
+        return Send(window, dataId, MemoryMarshal.AsBytes(payload.AsSpan()));
+    }
+
+    /// <returns>Whether a window of the class was found and accepted the data.</returns>
+    internal static bool TrySend(string windowClassName, nuint dataId, ReadOnlySpan<byte> payload)
+    {
+        HWND window = Find(windowClassName);
+        return !window.IsNull && Send(window, dataId, payload);
+    }
+
+    private static HWND Find(string windowClassName)
+    {
+        fixed (char* className = windowClassName)
+        {
+            return FindWindow(className, default);
+        }
+    }
+
+    private static bool Send(HWND window, nuint dataId, ReadOnlySpan<byte> payload)
+    {
+        fixed (byte* bytes = payload)
+        {
             var data = new Data
             {
                 DataId = dataId,
-                ByteCount = checked((uint)(payload.Length * sizeof(char))),
-                DataPointer = payload.Length == 0 ? 0 : (nint)text,
+                ByteCount = checked((uint)payload.Length),
+                DataPointer = payload.IsEmpty ? 0 : (nint)bytes,
             };
-            _ = GetWindowThreadProcessId(window, out uint processId) != 0
-                && AllowSetForegroundWindow(processId);
             return SendMessage(
                 window,
                 WM_COPYDATA,
