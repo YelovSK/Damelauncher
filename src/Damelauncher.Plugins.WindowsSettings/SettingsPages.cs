@@ -5,8 +5,8 @@ namespace Damelauncher.Plugins.WindowsSettings;
 /// <summary>Pages of the Settings app, opened through their <c>ms-settings:</c> links.</summary>
 internal static class SettingsPages
 {
-    private const string SettingsAppIcon =
-        @"shell:AppsFolder\windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel";
+    private static readonly ShellIcon SettingsAppIcon =
+        new(@"shell:AppsFolder\windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel");
 
     internal static SettingsEntry[] Create(IResultProvider provider)
     {

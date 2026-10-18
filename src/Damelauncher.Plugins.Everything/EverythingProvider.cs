@@ -43,7 +43,7 @@ internal sealed class EverythingProvider : IResultProvider, IDisposable
                 item.FullPath,
                 item.Name,
                 Path.GetDirectoryName(item.FullPath) ?? item.FullPath,
-                item.FullPath,
+                new ShellIcon(item.FullPath),
                 () => Open(item.FullPath));
             results[index] = new ScoredResult(result, ScoreOffset + (FuzzyMatcher.Score(query, item.Name) ?? 0));
         }

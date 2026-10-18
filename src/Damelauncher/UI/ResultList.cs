@@ -16,6 +16,8 @@ internal sealed class ResultList : UiElement
     private const float RowPadding = 12.0f;
     private static readonly UiFont TitleFont = new(UiDesign.BodyFontSize, FontWeight.Medium, Ellipsis: true);
     private static readonly UiFont SubtitleFont = new(UiDesign.CaptionFontSize, Ellipsis: true);
+    // Smaller than the icon box, since shell icons leave a margin inside theirs.
+    private static readonly UiFont GlyphFont = new(22.0f, Alignment: TextAlignment.Center, Family: UiTypography.IconFontFamily);
 
     private readonly ResultIcons _icons;
     private IReadOnlyList<LaunchResult> _results = [];
@@ -43,7 +45,7 @@ internal sealed class ResultList : UiElement
         _textLeft = RowPadding;
         for (int index = 0; index < results.Count; index++)
         {
-            if (results[index].IconSource is not null)
+            if (results[index].Icon is not null)
             {
                 _textLeft = RowPadding + ResultIcons.Size + RowPadding;
                 break;
@@ -128,12 +130,20 @@ internal sealed class ResultList : UiElement
                 context.Palette.ControlHover);
         }
 
-        if (result.IconSource is { } source && _icons.Get(source) is { } icon)
+        float inset = (RowHeight - ResultIcons.Size) / 2.0f;
+        var iconBounds = new RectangleF(row.X + RowPadding, row.Y + inset, ResultIcons.Size, ResultIcons.Size);
+        switch (result.Icon)
         {
-            float inset = (RowHeight - ResultIcons.Size) / 2.0f;
-            context.DrawBitmapFitted(
-                icon,
-                new RectangleF(row.X + RowPadding, row.Y + inset, ResultIcons.Size, ResultIcons.Size));
+            case ShellIcon shellIcon when _icons.Get(shellIcon.Location) is { } bitmap:
+                context.DrawBitmapFitted(bitmap, iconBounds);
+                break;
+            case GlyphIcon glyphIcon:
+                context.DrawText(
+                    glyphIcon.Glyph,
+                    GlyphFont,
+                    new Rect(iconBounds.X, iconBounds.Y, iconBounds.Width, iconBounds.Height),
+                    context.Palette.PrimaryText);
+                break;
         }
 
         float textWidth = MathF.Max(0.0f, row.Width - _textLeft - RowPadding);

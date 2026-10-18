@@ -10,7 +10,7 @@ internal sealed class LauncherCommandsProvider : IResultProvider
 
     internal LauncherCommandsProvider(Action openSettings, Action quit)
     {
-        string? icon = Environment.ProcessPath;
+        ShellIcon? icon = Environment.ProcessPath is { } path ? new ShellIcon(path) : null;
         _commands =
         [
             new LaunchResult(this, "settings", "Damelauncher Settings", "Hotkey, plugins and startup", icon, openSettings),

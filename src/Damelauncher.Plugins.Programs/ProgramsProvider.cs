@@ -57,6 +57,6 @@ internal sealed class ProgramsProvider : IResultProvider
             app.ParsingName,
             app.Name,
             "App",
-            ShellAppsFolder.GetPath(app.ParsingName),
+            new ShellIcon(ShellAppsFolder.GetPath(app.ParsingName)),
             () => ShellAppsFolder.Launch(app.ParsingName));
 }
