@@ -3,19 +3,28 @@ using Damelauncher.Plugins;
 
 namespace Damelauncher.Search;
 
-/// <summary>Asks every provider about the query and merges their results as each one answers.</summary>
+/// <summary>
+/// Asks every provider about the query and merges their results as each one answers, ranking
+/// results that were launched often and recently higher.
+/// </summary>
 /// <remarks>Used on the window thread, which the providers' awaits resume on.</remarks>
 internal sealed class ResultSearch : IDisposable
 {
     private const int MaxResults = 50;
+    // The boost grows with each doubling of a result's usage, so the first few launches count
+    // the most, and stops at a cap, so habit can't outrank a much better match.
+    private const double BoostPointsPerDoubling = 6.0;
+    private const double MaxBoostPoints = 24.0;
 
+    private readonly UsageHistory _history;
     private readonly IResultProvider[] _providers;
     private readonly Task[] _initializations;
     private readonly CancellationTokenSource _lifetime = new();
     private CancellationTokenSource? _query;
 
-    internal ResultSearch(params IResultProvider[] providers)
+    internal ResultSearch(UsageHistory history, params IResultProvider[] providers)
     {
+        _history = history;
         _providers = providers;
         _initializations = [.. providers.Select(provider => provider.InitializeAsync(_lifetime.Token))];
     }
@@ -45,6 +54,9 @@ internal sealed class ResultSearch : IDisposable
         }
     }
 
+    /// <param name="result">A result from <see cref="ResultsChanged"/>.</param>
+    internal void RecordLaunch(LaunchResult result) => _history.RecordLaunch(result.Id);
+
     public void Dispose()
     {
         _lifetime.Cancel();
@@ -66,7 +78,7 @@ internal sealed class ResultSearch : IDisposable
         try
         {
             await _initializations[index].WaitAsync(cancellationToken);
-            answers[index] = await provider.QueryAsync(query, cancellationToken);
+            answers[index] = Rank(provider, await provider.QueryAsync(query, cancellationToken));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -83,6 +95,26 @@ internal sealed class ResultSearch : IDisposable
         {
             ResultsChanged?.Invoke(Merge(answers));
         }
+    }
+
+    // Qualifies each id with its provider's, which keeps ids from different providers apart in the history.
+    private LaunchResult[] Rank(IResultProvider provider, IReadOnlyList<LaunchResult> results)
+    {
+        DateTime now = DateTime.UtcNow;
+        return
+        [
+            .. results.Select(result =>
+            {
+                string id = $"{provider.Id}:{result.Id}";
+                return result with { Id = id, Score = result.Score + GetBoost(id, now) };
+            }),
+        ];
+    }
+
+    private int GetBoost(string id, DateTime now)
+    {
+        double points = Math.Min(MaxBoostPoints, BoostPointsPerDoubling * Math.Log2(1.0 + _history.GetScore(id, now)));
+        return (int)(points * FuzzyMatcher.Point);
     }
 
     // A stable sort, so equal scores keep the providers' order and each provider's own order.

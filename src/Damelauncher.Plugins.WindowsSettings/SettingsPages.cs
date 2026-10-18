@@ -73,7 +73,7 @@ internal static class SettingsPages
     ];
 
     private static SettingsEntry Page(string title, string section, string link, params string[] keywords) =>
-        new(title, $"Settings › {section}", keywords, () => Open(link));
+        new(link, title, $"Settings › {section}", keywords, () => Open(link));
 
     private static void Open(string link)
     {

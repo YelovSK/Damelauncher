@@ -11,6 +11,9 @@ namespace Damelauncher.Plugins;
 /// </remarks>
 internal interface IResultProvider
 {
+    /// <summary>A short name, unique among providers, that saved usage history refers to.</summary>
+    public string Id { get; }
+
     /// <summary>Prepares the provider, for example by indexing. Runs once, before its first query.</summary>
     public Task InitializeAsync(CancellationToken cancellationToken);
 

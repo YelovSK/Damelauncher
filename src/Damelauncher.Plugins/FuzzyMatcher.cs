@@ -10,12 +10,13 @@ namespace Damelauncher.Plugins;
 /// </remarks>
 internal static class FuzzyMatcher
 {
+    /// <summary>One point of match score, which other adjustments to a score are measured in.</summary>
+    internal const int Point = 100;
+
     private const int MatchScore = 1;
     private const int WordStartBonus = 8;
     private const int AdjacentBonus = 4;
     private const int PrefixBonus = 16;
-    // Keeps the length tiebreak below one point of match score.
-    private const int LengthScale = 100;
 
     /// <returns>Higher is better, or <see langword="null"/> when the name doesn't match.</returns>
     internal static int? Score(string query, string name)
@@ -47,7 +48,7 @@ internal static class FuzzyMatcher
         }
 
         // Of two names that match equally well, the shorter is likelier the one meant.
-        return (total * LengthScale) - Math.Min(name.Length, LengthScale - 1);
+        return (total * Point) - Math.Min(name.Length, Point - 1);
     }
 
     private static int? ScoreFrom(string query, string name, int start)

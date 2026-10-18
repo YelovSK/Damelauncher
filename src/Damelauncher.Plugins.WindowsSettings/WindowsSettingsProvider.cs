@@ -5,6 +5,8 @@ internal sealed class WindowsSettingsProvider : IResultProvider
 {
     private readonly SettingsEntry[] _entries = [.. PowerCommands.Create(), .. SettingsPages.Create()];
 
+    public string Id => "settings";
+
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public ValueTask<IReadOnlyList<LaunchResult>> QueryAsync(string query, CancellationToken cancellationToken)
@@ -14,7 +16,7 @@ internal sealed class WindowsSettingsProvider : IResultProvider
         {
             if (entry.Score(query) is { } score)
             {
-                results.Add(new LaunchResult(entry.Title, entry.Subtitle, score, entry.Execute));
+                results.Add(new LaunchResult(entry.Id, entry.Title, entry.Subtitle, score, entry.Execute));
             }
         }
 

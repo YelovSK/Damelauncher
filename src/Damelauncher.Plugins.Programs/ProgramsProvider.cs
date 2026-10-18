@@ -7,6 +7,8 @@ internal sealed class ProgramsProvider : IResultProvider
 {
     private ShellApp[] _apps = [];
 
+    public string Id => "programs";
+
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         using var worker = new ComWorkerQueue<object?>("Programs index", 1, static () => null);
@@ -23,7 +25,7 @@ internal sealed class ProgramsProvider : IResultProvider
         {
             if (FuzzyMatcher.Score(query, app.Name) is { } score)
             {
-                results.Add(new LaunchResult(app.Name, "App", score, () => ShellAppsFolder.Launch(app.ParsingName)));
+                results.Add(new LaunchResult(app.ParsingName, app.Name, "App", score, () => ShellAppsFolder.Launch(app.ParsingName)));
             }
         }
 

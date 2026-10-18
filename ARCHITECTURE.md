@@ -29,3 +29,7 @@ A plugin is an `IResultProvider`. `ResultSearch` initializes every provider once
 Providers are used on the window thread, which awaits resume on through `WindowSynchronizationContext`. A provider that needs more than a moment, to index or to ask another process, does that work elsewhere, like `ProgramsProvider` indexing on a COM worker.
 
 A `LaunchResult` is plain data plus the action that runs it, which the provider supplies as a closure. Results score with the shared `FuzzyMatcher`, so scores from different providers compare on one scale.
+
+## Ranking
+
+A result's rank is its match score plus a boost for how often and how recently it was launched. Each `LaunchResult` carries an id that's stable within its provider, and `ResultSearch` qualifies it with the provider's id to look it up in `UsageHistory`. The history keeps one score per result, which grows by one with every launch and halves every two weeks, and saves it to `%LocalAppData%\Damelauncher\history.txt` as one tab-separated line per result. The boost grows with the logarithm of that score and is capped, so habit can lift a decent match but not a poor one.

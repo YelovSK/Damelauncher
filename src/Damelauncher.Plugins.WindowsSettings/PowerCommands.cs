@@ -9,16 +9,16 @@ internal static class PowerCommands
 
     internal static SettingsEntry[] Create() =>
     [
-        new("Lock", Subtitle, ["lock screen", "lock computer"], SystemPower.Lock),
-        new("Sleep", Subtitle, ["suspend", "standby"], SystemPower.Sleep),
-        Confirmed("Sign out", "Sign out of Windows?", ["log off", "log out"], SystemPower.SignOut),
-        Confirmed("Shut down", "Shut down the computer?", ["power off", "turn off", "shutdown"], SystemPower.ShutDown),
-        Confirmed("Restart", "Restart the computer?", ["reboot"], SystemPower.Restart),
+        new("power:lock", "Lock", Subtitle, ["lock screen", "lock computer"], SystemPower.Lock),
+        new("power:sleep", "Sleep", Subtitle, ["suspend", "standby"], SystemPower.Sleep),
+        Confirmed("power:signout", "Sign out", "Sign out of Windows?", ["log off", "log out"], SystemPower.SignOut),
+        Confirmed("power:shutdown", "Shut down", "Shut down the computer?", ["power off", "turn off", "shutdown"], SystemPower.ShutDown),
+        Confirmed("power:restart", "Restart", "Restart the computer?", ["reboot"], SystemPower.Restart),
     ];
 
     // Picking one of these by accident would close every open program, so they ask first.
-    private static SettingsEntry Confirmed(string title, string question, string[] keywords, Action execute) =>
-        new(title, Subtitle, keywords, () =>
+    private static SettingsEntry Confirmed(string id, string title, string question, string[] keywords, Action execute) =>
+        new(id, title, Subtitle, keywords, () =>
         {
             if (MessageDialog.Confirm(title, question))
             {

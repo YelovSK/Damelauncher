@@ -1,10 +1,10 @@
 namespace Damelauncher.Plugins.WindowsSettings;
 
 /// <param name="Keywords">Other words people search for it by, such as "wallpaper" for Background.</param>
-internal sealed record SettingsEntry(string Title, string Subtitle, string[] Keywords, Action Execute)
+internal sealed record SettingsEntry(string Id, string Title, string Subtitle, string[] Keywords, Action Execute)
 {
     // A keyword match ranks just below an equally good match on the title.
-    private const int KeywordPenalty = 100;
+    private const int KeywordPenalty = FuzzyMatcher.Point;
 
     internal int? Score(string query)
     {

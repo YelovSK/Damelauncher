@@ -37,6 +37,7 @@ internal sealed class LauncherApp : IDisposable
             _renderer.DirectWriteFactory,
             _window.Dpi);
         _search = new ResultSearch(
+            UsageHistory.Load(),
             new ProgramsProvider(),
             new WindowsSettingsProvider(),
             new EverythingProvider(),
@@ -98,6 +99,7 @@ internal sealed class LauncherApp : IDisposable
         try
         {
             result.Execute();
+            _search.RecordLaunch(result);
         }
         catch (Win32Exception)
         {

@@ -6,10 +6,13 @@ namespace Damelauncher.Plugins.Everything;
 internal sealed class EverythingProvider : IResultProvider, IDisposable
 {
     private const int MaxResults = 20;
-    // Files rank below every other provider's results, which are far fewer and likelier the ones meant.
-    private const int ScoreOffset = -1_000_000;
+    // Files rank below equally good matches from other providers, which are far fewer and
+    // likelier the ones meant, but a file whose name matches well still beats a poor match.
+    private const int ScoreOffset = -20 * FuzzyMatcher.Point;
 
     private readonly EverythingClient _client = new();
+
+    public string Id => "everything";
 
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -25,6 +28,7 @@ internal sealed class EverythingProvider : IResultProvider, IDisposable
         return
         [
             .. items.Select(item => new LaunchResult(
+                item.FullPath,
                 item.Name,
                 Path.GetDirectoryName(item.FullPath) ?? item.FullPath,
                 ScoreOffset + (FuzzyMatcher.Score(query, item.Name) ?? 0),
