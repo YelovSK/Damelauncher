@@ -14,6 +14,9 @@ internal sealed class ScrollView : UiElement
     private float _contentHeight;
     private float _contentWidth;
 
+    /// <summary>How far one notch of the mouse wheel scrolls.</summary>
+    internal float WheelStep { get; init; } = 48.0f;
+
     internal ScrollView(UiElement content)
     {
         _content = content;
@@ -66,7 +69,7 @@ internal sealed class ScrollView : UiElement
             return default;
         }
 
-        bool changed = _scrollOffset.ScrollBy(-input.WheelDelta / 120.0f * 48.0f);
+        bool changed = _scrollOffset.ScrollBy(-input.WheelDelta / 120.0f * WheelStep);
         return new UiPointerResult(Consumed: true, NeedsRepaint: changed);
     }
 

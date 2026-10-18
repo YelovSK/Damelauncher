@@ -34,7 +34,7 @@ internal sealed class LauncherUi : UiElement, IDisposable
         _query = new TextInput("Search") { HighlightsFocus = false };
         _icons = new ResultIcons(deviceContext, dpi, _host.Root.InvalidateVisual);
         _results = new ResultList(_icons);
-        _resultsView = new ScrollView(_results) { IsVisible = false };
+        _resultsView = new ScrollView(_results) { IsVisible = false, WheelStep = 3 * ResultList.RowHeight };
         // Typing goes back to searching. Subscribed first, so it's done before the search starts.
         _query.TextChanged += _ => ActionsTarget = null;
         _results.ActionsRequested += RequestActions;
