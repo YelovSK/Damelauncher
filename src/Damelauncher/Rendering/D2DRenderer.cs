@@ -177,7 +177,9 @@ internal sealed class D2DRenderer : IDisposable
                     false,
                     Usage.RenderTargetOutput,
                     BufferCount,
-                    Scaling.Stretch,
+                    // While the window and its buffers disagree in size, mid-resize, the frame is
+                    // cropped or left short rather than stretched out of shape.
+                    Scaling.None,
                     SwapEffect.FlipSequential,
                     Vortice.DXGI.AlphaMode.Ignore,
                     SwapChainFlags.FrameLatencyWaitableObject);

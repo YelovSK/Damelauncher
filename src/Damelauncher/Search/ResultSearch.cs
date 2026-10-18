@@ -11,6 +11,8 @@ namespace Damelauncher.Search;
 internal sealed class ResultSearch : IDisposable
 {
     private const int MaxResults = 50;
+    // How long a query's results wait for every provider to answer before showing what's there.
+    private static readonly TimeSpan AnswerDeadline = TimeSpan.FromMilliseconds(100);
     // The boost grows with each doubling of a result's usage, so the first few launches count
     // the most, and stops at a cap, so habit can't outrank a much better match.
     private const double BoostPointsPerDoubling = 6.0;
@@ -29,7 +31,10 @@ internal sealed class ResultSearch : IDisposable
         _initializations = [.. providers.Select(provider => provider.InitializeAsync(_lifetime.Token))];
     }
 
-    /// <summary>The latest query's results, raised again each time another provider answers.</summary>
+    /// <summary>
+    /// The latest query's results, once every provider has answered or the deadline passed, and
+    /// again for each provider that answers after it.
+    /// </summary>
     internal event Action<IReadOnlyList<LaunchResult>>? ResultsChanged;
 
     internal void Search(string query)
@@ -45,13 +50,16 @@ internal sealed class ResultSearch : IDisposable
             return;
         }
 
-        // The previous results stay up until the first provider answers, so typing doesn't flicker.
+        // The previous results stay up until the new ones are complete, so typing doesn't flicker
+        // through the partial results of whichever providers answer first.
         _query = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        var answers = new IReadOnlyList<LaunchResult>?[_providers.Length];
+        var pending = new PendingQuery(_providers.Length);
         for (int index = 0; index < _providers.Length; index++)
         {
-            _ = QueryProviderAsync(index, query, answers, _query.Token);
+            _ = QueryProviderAsync(index, query, pending, _query.Token);
         }
+
+        _ = AwaitDeadlineAsync(pending, _query.Token);
     }
 
     /// <param name="result">A result from <see cref="ResultsChanged"/>.</param>
@@ -71,14 +79,14 @@ internal sealed class ResultSearch : IDisposable
     private async Task QueryProviderAsync(
         int index,
         string query,
-        IReadOnlyList<LaunchResult>?[] answers,
+        PendingQuery pending,
         CancellationToken cancellationToken)
     {
         IResultProvider provider = _providers[index];
         try
         {
             await _initializations[index].WaitAsync(cancellationToken);
-            answers[index] = Rank(provider, await provider.QueryAsync(query, cancellationToken));
+            pending.Answers[index] = Rank(provider, await provider.QueryAsync(query, cancellationToken));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -88,12 +96,32 @@ internal sealed class ResultSearch : IDisposable
         {
             // One broken provider shouldn't take the others' results down with it.
             Debug.WriteLine($"{provider.GetType().Name} failed: {exception}");
-            answers[index] = [];
+            pending.Answers[index] = [];
         }
 
-        if (!cancellationToken.IsCancellationRequested)
+        pending.Unanswered--;
+        if (!cancellationToken.IsCancellationRequested && (pending.Unanswered == 0 || pending.DeadlinePassed))
         {
-            ResultsChanged?.Invoke(Merge(answers));
+            ResultsChanged?.Invoke(Merge(pending.Answers));
+        }
+    }
+
+    private async Task AwaitDeadlineAsync(PendingQuery pending, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(AnswerDeadline, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        pending.DeadlinePassed = true;
+        // With every answer in, the results were already shown when the last one arrived.
+        if (pending.Unanswered > 0)
+        {
+            ResultsChanged?.Invoke(Merge(pending.Answers));
         }
     }
 
@@ -125,4 +153,12 @@ internal sealed class ResultSearch : IDisposable
             .OrderByDescending(result => result.Score)
             .Take(MaxResults),
     ];
+
+    /// <summary>One query's answers so far, one slot per provider.</summary>
+    private sealed class PendingQuery(int providerCount)
+    {
+        internal IReadOnlyList<LaunchResult>?[] Answers { get; } = new IReadOnlyList<LaunchResult>?[providerCount];
+        internal int Unanswered { get; set; } = providerCount;
+        internal bool DeadlinePassed { get; set; }
+    }
 }

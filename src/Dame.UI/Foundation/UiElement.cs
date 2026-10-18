@@ -437,6 +437,18 @@ internal abstract class UiElement
     /// <summary>Requests that a descendant's bounds be brought into this element's visible region.</summary>
     internal virtual void BringIntoView(RectangleF descendantBounds) { }
 
+    /// <summary>Asks every ancestor, nearest first, to bring an area of this element into view.</summary>
+    /// <param name="area">In this element's local coordinates.</param>
+    internal void ScrollIntoView(RectangleF area)
+    {
+        for (UiElement? ancestor = Parent; ancestor is not null; ancestor = ancestor.Parent)
+        {
+            // Measured afresh for each ancestor, since a nearer one may have just scrolled.
+            RectangleF bounds = GetBoundsRelativeTo(ancestor);
+            ancestor.BringIntoView(new RectangleF(bounds.X + area.X, bounds.Y + area.Y, area.Width, area.Height));
+        }
+    }
+
     /// <summary>Updates whether keyboard focus is somewhere in this element's subtree.</summary>
     internal void SetFocusWithin(bool value)
     {

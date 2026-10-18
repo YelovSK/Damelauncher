@@ -9,6 +9,7 @@ using Vortice.Mathematics;
 namespace Damelauncher.UI;
 
 /// <summary>The results matching the query, one of which is selected and runs on Enter or a click.</summary>
+/// <remarks>As tall as all its rows, for a scroll view to show part of.</remarks>
 internal sealed class ResultList : UiElement
 {
     internal const float RowHeight = 48.0f;
@@ -18,21 +19,18 @@ internal sealed class ResultList : UiElement
 
     private IReadOnlyList<LaunchResult> _results = [];
     private int _selectedIndex;
-    // The row at the top, which scrolls only as far as it takes to keep the selection in view.
-    private int _firstVisibleIndex;
 
     internal event Action<LaunchResult>? ResultInvoked;
 
     internal override WindowCursor Cursor => WindowCursor.Pointer;
 
-    private int VisibleRowCount => Math.Max(1, (int)(Bounds.Height / RowHeight));
+    internal int Count => _results.Count;
 
     internal void SetResults(IReadOnlyList<LaunchResult> results)
     {
         _results = results;
         _selectedIndex = 0;
-        _firstVisibleIndex = 0;
-        InvalidateVisual();
+        InvalidateLayout();
     }
 
     internal void MoveSelection(int offset)
@@ -43,7 +41,7 @@ internal sealed class ResultList : UiElement
         }
 
         _selectedIndex = ((_selectedIndex + offset) % _results.Count + _results.Count) % _results.Count;
-        KeepSelectionVisible();
+        ScrollIntoView(GetRowBounds(_selectedIndex));
         InvalidateVisual();
     }
 
@@ -62,7 +60,7 @@ internal sealed class ResultList : UiElement
             return default;
         }
 
-        int index = _firstVisibleIndex + (int)(input.Position.Y / RowHeight);
+        int index = (int)(input.Position.Y / RowHeight);
         if (index >= 0 && index < _results.Count)
         {
             _selectedIndex = index;
@@ -73,60 +71,39 @@ internal sealed class ResultList : UiElement
         return new UiPointerResult(Consumed: true);
     }
 
-    protected override void ArrangeCore(SizeF finalSize) => KeepSelectionVisible();
+    protected override SizeF MeasureCore(SizeF availableSize) =>
+        new(float.IsFinite(availableSize.Width) ? availableSize.Width : 0.0f, _results.Count * RowHeight);
 
+    // Every row is drawn: there are few enough, and the scroll view clips the ones out of sight.
     protected override void DrawCore(in UiDrawContext context)
     {
-        context.PushClip(new RectangleF(PointF.Empty, Bounds.Size));
-        try
+        for (int index = 0; index < _results.Count; index++)
         {
-            int last = Math.Min(_results.Count, _firstVisibleIndex + VisibleRowCount + 1);
-            for (int index = _firstVisibleIndex; index < last; index++)
-            {
-                float top = (index - _firstVisibleIndex) * RowHeight;
-                DrawRow(context, _results[index], top, index == _selectedIndex);
-            }
-        }
-        finally
-        {
-            context.PopClip();
+            DrawRow(context, _results[index], GetRowBounds(index), index == _selectedIndex);
         }
     }
 
-    private void DrawRow(in UiDrawContext context, LaunchResult result, float top, bool selected)
+    private RectangleF GetRowBounds(int index) => new(0.0f, index * RowHeight, Bounds.Width, RowHeight);
+
+    private static void DrawRow(in UiDrawContext context, LaunchResult result, RectangleF row, bool selected)
     {
         if (selected)
         {
             context.FillRoundedRectangle(
-                new RoundedRectangle(
-                    new RectangleF(0.0f, top, Bounds.Width, RowHeight),
-                    UiDesign.ControlCornerRadius,
-                    UiDesign.ControlCornerRadius),
+                new RoundedRectangle(row, UiDesign.ControlCornerRadius, UiDesign.ControlCornerRadius),
                 context.Palette.ControlHover);
         }
 
-        float textWidth = MathF.Max(0.0f, Bounds.Width - (2.0f * RowPadding));
+        float textWidth = MathF.Max(0.0f, row.Width - (2.0f * RowPadding));
         context.DrawText(
             result.Title,
             TitleFont,
-            new Rect(RowPadding, top + 4.0f, textWidth, 22.0f),
+            new Rect(row.X + RowPadding, row.Y + 4.0f, textWidth, 22.0f),
             context.Palette.PrimaryText);
         context.DrawText(
             result.Subtitle,
             SubtitleFont,
-            new Rect(RowPadding, top + 24.0f, textWidth, 18.0f),
+            new Rect(row.X + RowPadding, row.Y + 24.0f, textWidth, 18.0f),
             context.Palette.SecondaryText);
-    }
-
-    private void KeepSelectionVisible()
-    {
-        if (_selectedIndex < _firstVisibleIndex)
-        {
-            _firstVisibleIndex = _selectedIndex;
-        }
-        else if (_selectedIndex >= _firstVisibleIndex + VisibleRowCount)
-        {
-            _firstVisibleIndex = _selectedIndex - VisibleRowCount + 1;
-        }
     }
 }

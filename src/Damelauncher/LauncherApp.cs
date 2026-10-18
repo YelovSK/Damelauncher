@@ -27,7 +27,7 @@ internal sealed class LauncherApp : IDisposable
         _window = new AppWindow(
             "Damelauncher",
             (int)LauncherUi.WindowWidth,
-            (int)LauncherUi.WindowHeight,
+            (int)LauncherUi.MaxWindowHeight,
             frame: AppWindowFrame.Popup);
         // Providers' awaits resume on the window thread, where the results are shown.
         SynchronizationContext.SetSynchronizationContext(new WindowSynchronizationContext(_window.Post));
@@ -43,7 +43,7 @@ internal sealed class LauncherApp : IDisposable
             new EverythingProvider(),
             new LauncherCommandsProvider(_window.Close));
         _ui.QueryChanged += _search.Search;
-        _search.ResultsChanged += _ui.SetResults;
+        _search.ResultsChanged += ShowResults;
         _ui.Invalidated += _window.RequestRepaint;
         _ui.CursorChanged += _window.ApplyCursor;
         _ui.ResultInvoked += Launch;
@@ -71,7 +71,7 @@ internal sealed class LauncherApp : IDisposable
         _ui.CursorChanged -= _window.ApplyCursor;
         _ui.ResultInvoked -= Launch;
         _ui.QueryChanged -= _search.Search;
-        _search.ResultsChanged -= _ui.SetResults;
+        _search.ResultsChanged -= ShowResults;
         _window.RenderFrame -= HandleRenderFrame;
         _window.Resized -= HandleResize;
         _window.DpiChanged -= HandleDpiChanged;
@@ -89,8 +89,16 @@ internal sealed class LauncherApp : IDisposable
     private void Show()
     {
         _ui.Reset();
-        _window.CenterOnCursorMonitor(LauncherUi.WindowWidth, LauncherUi.WindowHeight);
+        // Placed for its tallest, so the query box stays put as the results resize the window below it.
+        _window.CenterOnCursorMonitor(LauncherUi.WindowWidth, LauncherUi.MaxWindowHeight);
+        _window.SetSize(LauncherUi.WindowWidth, _ui.WindowHeight);
         _window.Show();
+    }
+
+    private void ShowResults(IReadOnlyList<LaunchResult> results)
+    {
+        _ui.SetResults(results);
+        _window.SetSize(LauncherUi.WindowWidth, _ui.WindowHeight);
     }
 
     private void Launch(LaunchResult result)

@@ -246,6 +246,42 @@ internal sealed unsafe class AppWindow : IDisposable
         }
     }
 
+    /// <summary>
+    /// Resizes a window without a frame, whose client area is the whole window, in DIPs, keeping
+    /// its top-left corner in place.
+    /// </summary>
+    /// <remarks>
+    /// Growing, the window first raises <see cref="Resized"/> and draws a frame at the new size,
+    /// and only then grows. A swap chain anchored at the top-left shows that frame cropped to the
+    /// old size, which looks the same, so the window never shows its new area empty or the old
+    /// frame stretched over it. Shrinking just crops the frame already there until the next one.
+    /// </remarks>
+    internal void SetSize(float width, float height)
+    {
+        if (Handle == 0)
+        {
+            return;
+        }
+
+        int pixelWidth = (int)MathF.Round(width * Dpi / 96.0f);
+        int pixelHeight = (int)MathF.Round(height * Dpi / 96.0f);
+        if (pixelWidth > ClientWidth || pixelHeight > ClientHeight)
+        {
+            Resized?.Invoke(pixelWidth, pixelHeight);
+            _frameRequested = true;
+            RenderRequestedFrame();
+        }
+
+        SetWindowPos(
+            (HWND)Handle,
+            default,
+            0,
+            0,
+            pixelWidth,
+            pixelHeight,
+            SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOMOVE);
+    }
+
     /// <summary>Shows the window with a fresh frame and brings it to the foreground.</summary>
     internal void Show()
     {

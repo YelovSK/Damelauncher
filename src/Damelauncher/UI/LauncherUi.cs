@@ -11,14 +11,15 @@ namespace Damelauncher.UI;
 
 internal sealed class LauncherUi : UiElement, IDisposable
 {
-    private const int VisibleRows = 7;
+    private const int MaxVisibleRows = 8;
+    // The height a TextInput always measures to.
+    private const float QueryHeight = 38.0f;
     internal const float WindowWidth = 640.0f;
-    internal const float WindowHeight = (2.0f * UiDesign.WindowMargin) + 38.0f + UiDesign.Spacing
-        + (VisibleRows * ResultList.RowHeight);
 
     private readonly UiHost _host;
     private readonly TextInput _query;
     private readonly ResultList _results;
+    private readonly ScrollView _resultsView;
 
     internal LauncherUi(
         ID2D1DeviceContext deviceContext,
@@ -28,11 +29,12 @@ internal sealed class LauncherUi : UiElement, IDisposable
         _host = new UiHost(this, deviceContext, directWriteFactory, dpi, Themes.Dark);
         _query = new TextInput("Search");
         _results = new ResultList();
+        _resultsView = new ScrollView(_results) { IsVisible = false };
 
-        AddChild(new StackPanel(UiOrientation.Vertical, _query, _results)
+        AddChild(new StackPanel(UiOrientation.Vertical, _query, _resultsView)
         {
             Spacing = UiDesign.Spacing,
-            Fill = _results,
+            Fill = _resultsView,
             Margin = new UiThickness(UiDesign.WindowMargin),
         });
         _host.Root.SetFocus(_query);
@@ -64,7 +66,17 @@ internal sealed class LauncherUi : UiElement, IDisposable
 
     internal UiTheme Palette => _host.Palette;
 
-    internal void SetResults(IReadOnlyList<LaunchResult> results) => _results.SetResults(results);
+    internal static float MaxWindowHeight => GetWindowHeight(MaxVisibleRows);
+
+    /// <summary>The height that fits the current results, up to <see cref="MaxWindowHeight"/>.</summary>
+    internal float WindowHeight => GetWindowHeight(Math.Min(_results.Count, MaxVisibleRows));
+
+    internal void SetResults(IReadOnlyList<LaunchResult> results)
+    {
+        _results.SetResults(results);
+        _resultsView.SetScrollOffset(0.0f);
+        _resultsView.IsVisible = results.Count > 0;
+    }
 
     /// <summary>Clears the query, so the launcher opens fresh.</summary>
     internal void Reset()
@@ -119,4 +131,8 @@ internal sealed class LauncherUi : UiElement, IDisposable
     protected override bool HitTestCore(PointF position) => false;
 
     public void Dispose() => _host.Dispose();
+
+    private static float GetWindowHeight(int rows) =>
+        (2.0f * UiDesign.WindowMargin) + QueryHeight
+        + (rows == 0 ? 0.0f : UiDesign.Spacing + (rows * ResultList.RowHeight));
 }

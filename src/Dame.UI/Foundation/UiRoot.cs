@@ -324,7 +324,7 @@ internal sealed class UiRoot
 
         if (element is not null)
         {
-            BringIntoView(element);
+            element.ScrollIntoView(new RectangleF(PointF.Empty, element.Bounds.Size));
         }
     }
 
@@ -526,14 +526,6 @@ internal sealed class UiRoot
         for (UiElement? element = current; element is not null; element = element.Parent)
         {
             element.SetFocusWithin(true);
-        }
-    }
-
-    private static void BringIntoView(UiElement element)
-    {
-        for (UiElement? ancestor = element.Parent; ancestor is not null; ancestor = ancestor.Parent)
-        {
-            ancestor.BringIntoView(element.GetBoundsRelativeTo(ancestor));
         }
     }
 }
