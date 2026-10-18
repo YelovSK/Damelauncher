@@ -3,7 +3,7 @@ using Dame.UI.Components;
 using Dame.UI.Foundation;
 using Dame.UI.Layout;
 using Dame.Win32.Input;
-using Damelauncher.Results;
+using Damelauncher.Plugins;
 using Vortice.Direct2D1;
 using Vortice.DirectWrite;
 
@@ -17,22 +17,17 @@ internal sealed class LauncherUi : UiElement, IDisposable
         + (VisibleRows * ResultList.RowHeight);
 
     private readonly UiHost _host;
-    private readonly ResultCatalog _catalog;
     private readonly TextInput _query;
     private readonly ResultList _results;
 
     internal LauncherUi(
         ID2D1DeviceContext deviceContext,
         IDWriteFactory directWriteFactory,
-        float dpi,
-        ResultCatalog catalog)
+        float dpi)
     {
         _host = new UiHost(this, deviceContext, directWriteFactory, dpi, Themes.Dark);
-        _catalog = catalog;
         _query = new TextInput("Search");
         _results = new ResultList();
-        _results.SetResults(catalog.Search(string.Empty));
-        _query.TextChanged += query => _results.SetResults(_catalog.Search(query));
 
         AddChild(new StackPanel(UiOrientation.Vertical, _query, _results)
         {
@@ -55,6 +50,12 @@ internal sealed class LauncherUi : UiElement, IDisposable
         remove => _host.Root.CursorChanged -= value;
     }
 
+    internal event Action<string>? QueryChanged
+    {
+        add => _query.TextChanged += value;
+        remove => _query.TextChanged -= value;
+    }
+
     internal event Action<LaunchResult>? ResultInvoked
     {
         add => _results.ResultInvoked += value;
@@ -62,6 +63,8 @@ internal sealed class LauncherUi : UiElement, IDisposable
     }
 
     internal UiTheme Palette => _host.Palette;
+
+    internal void SetResults(IReadOnlyList<LaunchResult> results) => _results.SetResults(results);
 
     /// <summary>Clears the query, so the launcher opens fresh.</summary>
     internal void Reset()

@@ -21,6 +21,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Damelauncher" />
     <InternalsVisibleTo Include="Dame.UI" />
+    <InternalsVisibleTo Include="Damelauncher.Plugins.Programs" />
   </ItemGroup>
 
 </Project>

@@ -6,17 +6,26 @@ Damelauncher is a keyboard launcher for Windows. It uses Win32 for the window an
 
 - `Dame.Win32` contains low-level Windows mechanisms such as windowing, input translation, global hotkeys, and shell integration.
 - `Dame.UI` is the app-independent UI framework: the element tree, layout, animation, and generic controls. It draws with Direct2D and takes input from Win32.
-- `Damelauncher` is the executable. It contains the renderer, the launcher UI, and the results.
+- `Damelauncher.Plugins` is the contract between the launcher and its plugins: `IResultProvider`, `LaunchResult`, and the `FuzzyMatcher` every provider scores with. It depends on nothing else.
+- `Damelauncher.Plugins.*` are the plugins, one project each. A plugin references the contract and, when it needs Windows mechanisms, `Dame.Win32`, but never the UI, the executable, or another plugin.
+- `Damelauncher` is the executable. It contains the renderer, the launcher UI, and the search that runs the plugins.
 
 ```text
+Damelauncher -> Damelauncher.Plugins.* -> Damelauncher.Plugins
+                                       -> Dame.Win32
 Damelauncher -> Dame.UI -> Dame.Win32
-Damelauncher -> Dame.Win32
 ```
 
 ## Runtime flow
 
-`LauncherApp` is the composition root. It creates a hidden popup `AppWindow`, the `D2DRenderer`, and `LauncherUi`, and registers a global hotkey on the window. The hotkey toggles the window, which is centered on the monitor under the cursor each time it opens. Escape, losing focus, or running a result hides it again; the process keeps running in the background.
-
-Typing updates the query, which `ResultCatalog` searches. `ResultList` draws the matches and runs the selected one on Enter or a click.
+`LauncherApp` is the composition root. It creates a hidden popup `AppWindow`, the `D2DRenderer`, `LauncherUi`, and `ResultSearch` with the list of providers, and registers a global hotkey on the window. The hotkey toggles the window, which is centered on the monitor under the cursor each time it opens. Escape, losing focus, or running a result hides it again; the process keeps running in the background.
 
 Rendering is demand-driven, as in Dameview: input and state changes request frames, and nothing renders while nothing changes.
+
+## Plugins
+
+A plugin is an `IResultProvider`. `ResultSearch` initializes every provider once at startup, then sends each query to all of them. A new query cancels the previous one. Results merge by score as each provider answers, so a slow provider doesn't hold back a fast one, and the previous results stay on screen until the first answer to a new query arrives.
+
+Providers are used on the window thread, which awaits resume on through `WindowSynchronizationContext`. A provider that needs more than a moment, to index or to ask another process, does that work elsewhere, like `ProgramsProvider` indexing on a COM worker.
+
+A `LaunchResult` is plain data plus the action that runs it, which the provider supplies as a closure. Results score with the shared `FuzzyMatcher`, so scores from different providers compare on one scale.

@@ -1,7 +1,7 @@
 using System.Drawing;
 using Dame.UI.Foundation;
 using Dame.Win32.Input;
-using Damelauncher.Results;
+using Damelauncher.Plugins;
 using Vortice.Direct2D1;
 using Vortice.DirectWrite;
 using Vortice.Mathematics;

@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using Dame.Win32;
 using Dame.Win32.Input;
+using Damelauncher.Plugins;
+using Damelauncher.Plugins.Programs;
 using Damelauncher.Rendering;
-using Damelauncher.Results;
+using Damelauncher.Search;
 using Damelauncher.UI;
 
 namespace Damelauncher;
@@ -16,6 +18,7 @@ internal sealed class LauncherApp : IDisposable
     private readonly AppWindow _window;
     private readonly D2DRenderer _renderer;
     private readonly LauncherUi _ui;
+    private readonly ResultSearch _search;
 
     internal LauncherApp()
     {
@@ -24,12 +27,16 @@ internal sealed class LauncherApp : IDisposable
             (int)LauncherUi.WindowWidth,
             (int)LauncherUi.WindowHeight,
             frame: AppWindowFrame.Popup);
+        // Providers' awaits resume on the window thread, where the results are shown.
+        SynchronizationContext.SetSynchronizationContext(new WindowSynchronizationContext(_window.Post));
         _renderer = new D2DRenderer(_window.Handle, _window.ClientWidth, _window.ClientHeight, _window.Dpi);
         _ui = new LauncherUi(
             _renderer.DeviceContext,
             _renderer.DirectWriteFactory,
-            _window.Dpi,
-            new ResultCatalog(_window.Close));
+            _window.Dpi);
+        _search = new ResultSearch(new ProgramsProvider(), new LauncherCommandsProvider(_window.Close));
+        _ui.QueryChanged += _search.Search;
+        _search.ResultsChanged += _ui.SetResults;
         _ui.Invalidated += _window.RequestRepaint;
         _ui.CursorChanged += _window.ApplyCursor;
         _ui.ResultInvoked += Launch;
@@ -56,6 +63,8 @@ internal sealed class LauncherApp : IDisposable
         _ui.Invalidated -= _window.RequestRepaint;
         _ui.CursorChanged -= _window.ApplyCursor;
         _ui.ResultInvoked -= Launch;
+        _ui.QueryChanged -= _search.Search;
+        _search.ResultsChanged -= _ui.SetResults;
         _window.RenderFrame -= HandleRenderFrame;
         _window.Resized -= HandleResize;
         _window.DpiChanged -= HandleDpiChanged;
@@ -64,6 +73,7 @@ internal sealed class LauncherApp : IDisposable
         _window.PointerInput -= HandlePointerInput;
         _window.HotKeyPressed -= HandleHotKey;
         _window.Deactivated -= _window.Hide;
+        _search.Dispose();
         _ui.Dispose();
         _renderer.Dispose();
         _window.Dispose();

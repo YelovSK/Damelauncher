@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../Dame.UI/Dame.UI.csproj" />
+    <ProjectReference Include="../Damelauncher.Plugins/Damelauncher.Plugins.csproj" />
+    <ProjectReference Include="../Damelauncher.Plugins.Programs/Damelauncher.Plugins.Programs.csproj" />
     <ProjectReference Include="../Dame.Win32/Dame.Win32.csproj" />
   </ItemGroup>
 
