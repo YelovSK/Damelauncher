@@ -1,0 +1,32 @@
+using Microsoft.Win32;
+
+namespace Dame.Win32;
+
+// Per-user installed-program metadata for an application with an uninstall command.
+internal sealed class InstalledProgramRegistration(string applicationId)
+{
+    private readonly string _registryPath =
+        $@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{applicationId}";
+
+    internal void Register(
+        string displayName, string publisher, string displayVersion, string installDirectory,
+        string executablePath, string uninstallArguments, string quietUninstallArguments)
+    {
+        using RegistryKey key = Registry.CurrentUser.CreateSubKey(_registryPath);
+        key.SetValue("DisplayName", displayName);
+        key.SetValue("Publisher", publisher);
+        key.SetValue("DisplayVersion", displayVersion);
+        key.SetValue("InstallLocation", installDirectory);
+        key.SetValue("DisplayIcon", executablePath);
+        key.SetValue("UninstallString", $"\"{executablePath}\" {uninstallArguments}");
+        key.SetValue("QuietUninstallString", $"\"{executablePath}\" {quietUninstallArguments}");
+        key.SetValue("EstimatedSize", checked((int)((new FileInfo(executablePath).Length + 1023) / 1024)), RegistryValueKind.DWord);
+        key.SetValue("NoModify", 1, RegistryValueKind.DWord);
+        key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
+    }
+
+    internal void Unregister()
+    {
+        Registry.CurrentUser.DeleteSubKeyTree(_registryPath, throwOnMissingSubKey: false);
+    }
+}

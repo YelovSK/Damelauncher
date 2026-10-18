@@ -1,0 +1,241 @@
+using System.Drawing;
+using Dame.UI.Foundation;
+using Dame.UI.Layout;
+using Dame.Win32.Input;
+using Vortice.Direct2D1;
+using Vortice.Mathematics;
+
+namespace Dame.UI.Components;
+
+internal sealed class Dropdown<T> : InteractiveControl
+{
+    private static readonly UiFont LabelFont = new(UiDesign.BodyFontSize);
+
+    private readonly Action<T> _changed;
+    private readonly Choice<T>[] _options;
+    private readonly PopupHost _popupHost;
+    private readonly PopupList _popupList;
+
+    internal Dropdown(
+        PopupHost popupHost,
+        IReadOnlyList<Choice<T>> options,
+        T selectedValue,
+        Action<T> changed)
+    {
+        if (options.Count == 0)
+        {
+            throw new ArgumentException("A dropdown requires at least one option.", nameof(options));
+        }
+
+        _popupHost = popupHost;
+        _options = [.. options];
+        _changed = changed;
+        SelectedIndex = FindIndex(selectedValue);
+        _popupList = new PopupList(_options, SelectFromPopup);
+        _popupList.SelectedIndex = SelectedIndex;
+    }
+
+    internal bool IsOpen => HasVisualState(UiVisualState.Open);
+    internal int SelectedIndex { get; private set; }
+    internal T SelectedValue
+    {
+        get => _options[SelectedIndex].Value;
+        set => Select(FindIndex(value), notify: false);
+    }
+
+    internal override bool OnKeyEvent(WindowKeyEvent input)
+    {
+        if (!IsEnabled)
+        {
+            return false;
+        }
+
+        if (input.Key == WindowKey.Escape && IsOpen)
+        {
+            ClosePopup();
+            return true;
+        }
+
+        if (input.Key is WindowKey.Up or WindowKey.Down)
+        {
+            int direction = input.Key == WindowKey.Up ? -1 : 1;
+            int next = (SelectedIndex + direction + _options.Length) % _options.Length;
+            Select(next, notify: true);
+            return true;
+        }
+
+        return base.OnKeyEvent(input);
+    }
+
+    protected override SizeF MeasureCore(SizeF availableSize)
+    {
+        float width = float.IsFinite(availableSize.Width) ? availableSize.Width : 180.0f;
+        return new SizeF(MathF.Max(0.0f, width), 36.0f);
+    }
+
+    protected override void DrawCore(in UiDrawContext context)
+    {
+        float width = Bounds.Width;
+        float height = Bounds.Height;
+        var bounds = new RoundedRectangle(
+            new RectangleF(0.0f, 0.0f, width, height),
+            UiDesign.ControlCornerRadius,
+            UiDesign.ControlCornerRadius);
+        context.FillRoundedRectangle(bounds, context.Palette.ControlSurface);
+        if (IsOpen)
+        {
+            context.FillRoundedRectangle(bounds, context.Palette.Accent, 0.14f);
+        }
+
+        if (HoverAmount > 0.0f)
+        {
+            context.FillRoundedRectangle(bounds, context.Palette.ControlHover, HoverAmount);
+        }
+
+        if (PressedAmount > 0.0f)
+        {
+            context.FillRoundedRectangle(bounds, context.Palette.ControlPressed, PressedAmount);
+        }
+
+        context.DrawText(
+            _options[SelectedIndex].Label,
+            LabelFont,
+            new Rect(12.0f, 0.0f, MathF.Max(12.0f, width - 12.0f), height),
+            IsEnabled ? context.Palette.PrimaryText : context.Palette.SecondaryText,
+            DrawTextOptions.Clip);
+    }
+
+    protected override void Activate()
+    {
+        if (IsOpen)
+        {
+            ClosePopup();
+            return;
+        }
+
+        SetVisualState(UiVisualState.Open, true);
+        _popupHost.Show(this, _popupList, OnPopupClosed);
+    }
+
+    protected override void OnVisualStateChanged()
+    {
+        base.OnVisualStateChanged();
+        if (!IsEnabled && IsOpen)
+        {
+            ClosePopup();
+        }
+    }
+
+    private int FindIndex(T value)
+    {
+        int index = Array.FindIndex(
+            _options,
+            option => EqualityComparer<T>.Default.Equals(option.Value, value));
+        return index >= 0
+            ? index
+            : throw new ArgumentOutOfRangeException(nameof(value), "The value is not a dropdown option.");
+    }
+
+    private void Select(int index, bool notify)
+    {
+        if (SelectedIndex == index)
+        {
+            return;
+        }
+
+        SelectedIndex = index;
+        _popupList.SelectedIndex = index;
+        InvalidateVisual();
+        if (notify)
+        {
+            _changed(_options[index].Value);
+        }
+    }
+
+    private void SelectFromPopup(int index)
+    {
+        Select(index, notify: true);
+        ClosePopup();
+        Root?.SetFocus(this);
+    }
+
+    private void ClosePopup() => _popupHost.Close();
+
+    private void OnPopupClosed()
+    {
+        SetVisualState(UiVisualState.Open, false);
+    }
+
+    private sealed class PopupList : UiElement
+    {
+        private const float HorizontalPadding = 4.0f;
+        private const float VerticalPadding = 2.0f;
+        private const float ItemHeight = 40.0f;
+        private const float MinimumWidth = 160.0f;
+
+        private readonly Button[] _buttons;
+        private readonly StackPanel _column;
+
+        internal PopupList(
+            IReadOnlyList<Choice<T>> options,
+            Action<int> selected)
+        {
+            _buttons = new Button[options.Count];
+            for (int index = 0; index < options.Count; index++)
+            {
+                int optionIndex = index;
+                _buttons[index] = new Button(
+                    options[index].Label,
+                    () => selected(optionIndex),
+                    backgroundInsetY: 2.0f);
+            }
+
+            _column = new StackPanel(UiOrientation.Vertical, _buttons)
+            {
+                Distribution = StackPanelDistribution.Equal,
+            };
+            AddChild(_column);
+        }
+
+        internal int SelectedIndex
+        {
+            set
+            {
+                for (int index = 0; index < _buttons.Length; index++)
+                {
+                    _buttons[index].IsSelected = index == value;
+                }
+            }
+        }
+
+
+        // The host widens the list to its dropdown.
+        protected override SizeF MeasureCore(SizeF availableSize)
+        {
+            var size = new SizeF(MinimumWidth, 2.0f * VerticalPadding + _buttons.Length * ItemHeight);
+            _column.Measure(new SizeF(
+                size.Width - 2.0f * HorizontalPadding,
+                size.Height - 2.0f * VerticalPadding));
+            return size;
+        }
+
+        protected override void ArrangeCore(SizeF finalSize)
+        {
+            _column.Arrange(new RectangleF(
+                HorizontalPadding,
+                VerticalPadding,
+                MathF.Max(0.0f, finalSize.Width - 2.0f * HorizontalPadding),
+                MathF.Max(0.0f, finalSize.Height - 2.0f * VerticalPadding)));
+        }
+
+        protected override void DrawCore(in UiDrawContext context)
+        {
+            var surface = new RoundedRectangle(
+                new RectangleF(0.0f, 0.0f, Bounds.Width, Bounds.Height),
+                UiDesign.ControlCornerRadius,
+                UiDesign.ControlCornerRadius);
+            context.FillRoundedRectangle(surface, context.Palette.Surface);
+            context.DrawRoundedRectangle(surface, context.Palette.SurfaceBorder);
+        }
+    }
+}

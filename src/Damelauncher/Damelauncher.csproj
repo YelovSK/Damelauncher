@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishAot>true</PublishAot>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <StackTraceSupport Condition="'$(Configuration)' == 'Release'">false</StackTraceSupport>
+    <InvariantGlobalization Condition="'$(Configuration)' == 'Release'">true</InvariantGlobalization>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <DisableRuntimeMarshalling>true</DisableRuntimeMarshalling>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Vortice.Direct2D1" Version="3.8.3" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Dame.UI/Dame.UI.csproj" />
+    <ProjectReference Include="../Dame.Win32/Dame.Win32.csproj" />
+  </ItemGroup>
+
+</Project>
