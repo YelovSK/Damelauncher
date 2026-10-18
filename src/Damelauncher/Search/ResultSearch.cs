@@ -24,6 +24,9 @@ internal sealed class ResultSearch : IDisposable
 
     private readonly UsageHistory _history;
     private readonly IResultProvider[] _providers;
+    private readonly ProviderRouting[] _routing;
+    // Which providers the current query asks, refilled for every query.
+    private readonly bool[] _asked;
     private readonly Task[] _initializations;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SynchronizationContext? _context;
@@ -38,6 +41,8 @@ internal sealed class ResultSearch : IDisposable
     {
         _history = history;
         _providers = providers;
+        _routing = [.. providers.Select(_ => ProviderRouting.Default)];
+        _asked = new bool[providers.Length];
         _context = SynchronizationContext.Current;
         _deadline = new Timer(static state => ((ResultSearch)state!).OnDeadline(), this, Timeout.Infinite, Timeout.Infinite);
         _initializations = [.. providers.Select(provider => provider.InitializeAsync(_lifetime.Token))];
@@ -49,8 +54,15 @@ internal sealed class ResultSearch : IDisposable
     /// </summary>
     internal event Action<IReadOnlyList<LaunchResult>>? ResultsChanged;
 
-    /// <summary>The ids of the providers left out of searches, from the next one on.</summary>
-    internal IReadOnlySet<string> DisabledProviders { get; set; } = new HashSet<string>();
+    /// <summary>Changes which queries reach a provider, from the next search on.</summary>
+    internal void SetRouting(string providerId, ProviderRouting routing)
+    {
+        int index = Array.FindIndex(_providers, provider => provider.Id == providerId);
+        if (index >= 0)
+        {
+            _routing[index] = routing;
+        }
+    }
 
     internal void Search(string query)
     {
@@ -60,17 +72,8 @@ internal sealed class ResultSearch : IDisposable
         _pending = null;
         _deadline.Change(Timeout.Infinite, Timeout.Infinite);
 
-        query = query.Trim();
-        int enabledCount = 0;
-        foreach (IResultProvider provider in _providers)
-        {
-            if (!DisabledProviders.Contains(provider.Id))
-            {
-                enabledCount++;
-            }
-        }
-
-        if (query.Length == 0 || enabledCount == 0)
+        int askedCount = ChooseProviders(query, out string providerQuery);
+        if (providerQuery.Length == 0 || askedCount == 0)
         {
             ResultsChanged?.Invoke([]);
             return;
@@ -79,13 +82,13 @@ internal sealed class ResultSearch : IDisposable
         // The previous results stay up until the new ones are complete, so typing doesn't flicker
         // through the partial results of whichever providers answer first.
         _query = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        var pending = new PendingQuery(_providers.Length, enabledCount);
+        var pending = new PendingQuery(_providers.Length, askedCount);
         _pending = pending;
         for (int index = 0; index < _providers.Length; index++)
         {
-            if (!DisabledProviders.Contains(_providers[index].Id))
+            if (_asked[index])
             {
-                _ = QueryProviderAsync(index, query, pending, _query.Token);
+                _ = QueryProviderAsync(index, providerQuery, pending, _query.Token);
             }
         }
 
@@ -162,6 +165,45 @@ internal sealed class ResultSearch : IDisposable
         {
             ResultsChanged?.Invoke(Merge(pending.Answers));
         }
+    }
+
+    /// <summary>
+    /// Marks the providers a query asks: the ones its keyword belongs to, when it starts with
+    /// one and a space, and otherwise the ones in normal searches.
+    /// </summary>
+    /// <param name="providerQuery">What they're asked, without the keyword or surrounding spaces.</param>
+    /// <returns>How many are asked.</returns>
+    private int ChooseProviders(string query, out string providerQuery)
+    {
+        string text = query.TrimStart();
+        int separator = text.IndexOf(' ', StringComparison.Ordinal);
+        if (separator > 0)
+        {
+            ReadOnlySpan<char> keyword = text.AsSpan(0, separator);
+            int keywordCount = 0;
+            for (int index = 0; index < _providers.Length; index++)
+            {
+                _asked[index] = _routing[index] is { Enabled: true, Keyword: { } providerKeyword }
+                    && keyword.Equals(providerKeyword, StringComparison.OrdinalIgnoreCase);
+                keywordCount += _asked[index] ? 1 : 0;
+            }
+
+            if (keywordCount > 0)
+            {
+                providerQuery = text[(separator + 1)..].Trim();
+                return keywordCount;
+            }
+        }
+
+        int normalCount = 0;
+        for (int index = 0; index < _providers.Length; index++)
+        {
+            _asked[index] = _routing[index] is { Enabled: true, InNormalSearches: true };
+            normalCount += _asked[index] ? 1 : 0;
+        }
+
+        providerQuery = text.TrimEnd();
+        return normalCount;
     }
 
     // On the timer's thread, which only hands the deadline to the window thread. Without a

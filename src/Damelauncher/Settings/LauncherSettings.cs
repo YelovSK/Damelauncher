@@ -9,6 +9,8 @@ internal sealed record LauncherSettings
     /// <summary>Whether tapping the Windows key on its own opens the launcher too, instead of Start.</summary>
     public bool OpenWithWindowsKey { get; init; }
 
-    /// <summary>The ids of the plugins that are turned off.</summary>
-    public IReadOnlySet<string> DisabledPlugins { get; init; } = new HashSet<string>();
+    /// <summary>Each plugin's settings by its id, holding only the plugins whose settings were changed.</summary>
+    public IReadOnlyDictionary<string, PluginSettings> Plugins { get; init; } = new Dictionary<string, PluginSettings>();
+
+    internal PluginSettings GetPlugin(string id) => Plugins.TryGetValue(id, out PluginSettings? plugin) ? plugin : new PluginSettings();
 }

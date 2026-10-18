@@ -48,10 +48,11 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _plugins = [new ProgramsProvider(), new WindowsSettingsProvider(), new EverythingProvider()];
         _search = new ResultSearch(
             UsageHistory.Load(UsageHistory.DefaultPath),
-            [.. _plugins, new LauncherCommandsProvider(OpenSettings, _window.Close)])
+            [.. _plugins, new LauncherCommandsProvider(OpenSettings, _window.Close)]);
+        foreach (IResultProvider plugin in _plugins)
         {
-            DisabledProviders = _settings.Current.DisabledPlugins,
-        };
+            RoutePlugin(plugin);
+        }
         _ui.QueryChanged += _search.Search;
         _search.ResultsChanged += ShowResults;
         _ui.Invalidated += _window.RequestRepaint;
@@ -154,20 +155,14 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         }
     }
 
-    void ISettingsActions.SetPluginEnabled(string id, bool enabled)
+    void ISettingsActions.SetPlugin(IResultProvider plugin, PluginSettings settings)
     {
-        var disabled = new HashSet<string>(_settings.Current.DisabledPlugins);
-        if (enabled)
+        var plugins = new Dictionary<string, PluginSettings>(_settings.Current.Plugins)
         {
-            disabled.Remove(id);
-        }
-        else
-        {
-            disabled.Add(id);
-        }
-
-        _settings.Update(_settings.Current with { DisabledPlugins = disabled });
-        _search.DisabledProviders = disabled;
+            [plugin.Id] = settings,
+        };
+        _settings.Update(_settings.Current with { Plugins = plugins });
+        RoutePlugin(plugin);
     }
 
     public void Dispose()
@@ -202,6 +197,15 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _window.CenterOnCursorMonitor(LauncherUi.WindowWidth, LauncherUi.MaxWindowHeight);
         _window.SetSize(LauncherUi.WindowWidth, _ui.WindowHeight);
         _window.Show();
+    }
+
+    private void RoutePlugin(IResultProvider plugin)
+    {
+        PluginSettings settings = _settings.Current.GetPlugin(plugin.Id);
+        string? keyword = (settings.Keyword ?? plugin.DefaultKeyword)?.Trim();
+        _search.SetRouting(
+            plugin.Id,
+            new ProviderRouting(settings.Enabled, string.IsNullOrEmpty(keyword) ? null : keyword, settings.InNormalSearches));
     }
 
     private void OpenSettings()

@@ -9,6 +9,7 @@
 
 - Opens with a hotkey (Alt + Space by default), or by tapping the Windows key on its own
 - Fuzzy search
+- Keywords to search a single plugin, e.g. `f report` for files only
 - Results ranked by frequency and recency
 - Plugins:
   - Programs

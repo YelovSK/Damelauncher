@@ -14,7 +14,7 @@ public sealed class SettingsIniSerializerTests
         Assert.AreEqual(HotKey.Default, settings.HotKey);
         Assert.AreEqual(ThemeId.Dark, settings.Theme);
         Assert.IsFalse(settings.OpenWithWindowsKey);
-        Assert.IsEmpty(settings.DisabledPlugins);
+        Assert.IsEmpty(settings.Plugins);
         Assert.IsEmpty(ignored);
     }
 
@@ -26,7 +26,12 @@ public sealed class SettingsIniSerializerTests
             Theme = ThemeId.CatppuccinMocha,
             HotKey = new HotKey(HotKeyModifiers.Control | HotKeyModifiers.Shift, WindowKey.K),
             OpenWithWindowsKey = true,
-            DisabledPlugins = new HashSet<string> { "everything", "settings" },
+            Plugins = new Dictionary<string, PluginSettings>
+            {
+                ["everything"] = new() { Enabled = true, Keyword = "find", InNormalSearches = false },
+                ["settings"] = new() { Enabled = false, Keyword = string.Empty },
+                ["programs"] = new() { Keyword = null },
+            },
         };
 
         (LauncherSettings read, IReadOnlyList<string> ignored) =
@@ -35,7 +40,11 @@ public sealed class SettingsIniSerializerTests
         Assert.AreEqual(written.Theme, read.Theme);
         Assert.AreEqual(written.HotKey, read.HotKey);
         Assert.AreEqual(written.OpenWithWindowsKey, read.OpenWithWindowsKey);
-        CollectionAssert.AreEquivalent(written.DisabledPlugins.ToArray(), read.DisabledPlugins.ToArray());
+        CollectionAssert.AreEquivalent(written.Plugins.Keys.ToArray(), read.Plugins.Keys.ToArray());
+        foreach ((string id, PluginSettings plugin) in written.Plugins)
+        {
+            Assert.AreEqual(plugin, read.Plugins[id], id);
+        }
         Assert.IsEmpty(ignored);
     }
 

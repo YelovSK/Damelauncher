@@ -12,6 +12,8 @@ internal sealed class ProgramsProvider : IResultProvider
 
     public string Name => "Programs";
 
+    public string DefaultKeyword => "p";
+
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         using var worker = new ComWorkerQueue<object?>("Programs index", 1, static () => null);

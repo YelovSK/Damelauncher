@@ -18,12 +18,12 @@ internal static class SettingsIniSerializer
             (s, value) => s with { HotKey = value }),
         Binding.Bool(Root, "windowsKey", s => s.OpenWithWindowsKey, (s, value) => s with { OpenWithWindowsKey = value }),
         Binding.Enum(Root, "theme", s => s.Theme, (s, value) => s with { Theme = value }),
-        Binding.Custom(
-            (document, s, _) => document.Get(Root, "disabledPlugins") is { } text
-                ? s with { DisabledPlugins = text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToHashSet() }
-                : s,
-            (document, s) => document.Set(Root, "disabledPlugins", string.Join(',', s.DisabledPlugins.Order(StringComparer.Ordinal)))),
+        Binding.Custom(ReadPlugins, WritePlugins),
     ];
+
+    // Each plugin has a section of its own, named after its id, such as [plugins.everything].
+    private const string PluginSectionPrefix = "plugins.";
+
 
     /// <returns>The settings, and the values that couldn't be read and were left at their defaults.</returns>
     internal static (LauncherSettings Settings, IReadOnlyList<string> Ignored) Read(string text)
@@ -37,6 +37,58 @@ internal static class SettingsIniSerializer
         }
 
         return (settings, ignored);
+    }
+
+    private static LauncherSettings ReadPlugins(IniDocument document, LauncherSettings settings, List<string> ignored)
+    {
+        var plugins = new Dictionary<string, PluginSettings>();
+        foreach (string section in document.SectionNames)
+        {
+            if (!section.StartsWith(PluginSectionPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var plugin = new PluginSettings
+            {
+                Enabled = ReadBool(document, section, "enabled", ignored) ?? true,
+                Keyword = document.Get(section, "keyword"),
+                InNormalSearches = ReadBool(document, section, "normalSearch", ignored) ?? true,
+            };
+            plugins[section[PluginSectionPrefix.Length..]] = plugin;
+        }
+
+        return settings with { Plugins = plugins };
+    }
+
+    private static void WritePlugins(IniDocument document, LauncherSettings settings)
+    {
+        foreach ((string id, PluginSettings plugin) in settings.Plugins.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            string section = PluginSectionPrefix + id;
+            document.Set(section, "enabled", IniValue.FormatBool(plugin.Enabled));
+            document.Set(section, "normalSearch", IniValue.FormatBool(plugin.InNormalSearches));
+            if (plugin.Keyword is { } keyword)
+            {
+                document.Set(section, "keyword", keyword);
+            }
+        }
+    }
+
+    private static bool? ReadBool(IniDocument document, string section, string key, List<string> ignored)
+    {
+        if (document.Get(section, key) is not { } text)
+        {
+            return null;
+        }
+
+        bool? value = IniValue.ParseBool(text);
+        if (value is null)
+        {
+            ignored.Add($"{section}.{key} '{text}'");
+        }
+
+        return value;
     }
 
     /// <param name="existing">The file as it is now, whose comments and unknown keys are kept.</param>

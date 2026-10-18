@@ -10,7 +10,7 @@ internal interface ISettingsActions
 
     public ThemeId Theme { set; }
 
-    /// <summary>The plugins that can be turned off.</summary>
+    /// <summary>The plugins whose settings can be changed.</summary>
     public IReadOnlyList<IResultProvider> Plugins { get; }
 
     /// <summary>Whether the hotkey in <see cref="Settings"/> works, which it doesn't while another app has it.</summary>
@@ -29,5 +29,5 @@ internal interface ISettingsActions
     /// </summary>
     public void SuspendHotKey(bool suspended);
 
-    public void SetPluginEnabled(string id, bool enabled);
+    public void SetPlugin(IResultProvider plugin, PluginSettings settings);
 }

@@ -13,7 +13,7 @@ namespace Damelauncher.UI;
 internal sealed class SettingsUi : UiElement, IDisposable
 {
     internal const float WindowWidth = 480.0f;
-    internal const float WindowHeight = 520.0f;
+    internal const float WindowHeight = 640.0f;
 
     private readonly UiHost _host;
     private readonly ISettingsActions _actions;
@@ -69,7 +69,7 @@ internal sealed class SettingsUi : UiElement, IDisposable
             new Toggle("Start with Windows", actions.StartsWithWindows, value => actions.StartsWithWindows = value));
         var plugins = new SettingsGroup(
             "Plugins",
-            [.. actions.Plugins.Select(CreatePluginToggle)]);
+            [.. actions.Plugins.Select(CreatePluginSettings)]);
         var title = new TextBlock("Settings", UiTextStyle.Heading, UiTextTone.Primary, UiTextWrapping.NoWrap);
 
         AddChild(new ScrollView(new StackPanel(UiOrientation.Vertical, title, general, plugins)
@@ -109,6 +109,8 @@ internal sealed class SettingsUi : UiElement, IDisposable
         _host.Root.HandleCapturedKey(input)
         || _host.Root.HandleKey(input, this, wrapFocus: true, directionalNavigation: false);
 
+    internal bool HandleTextInput(string text) => _host.Root.HandleTextInput(text);
+
     internal void SetDpi(float dpi) => _host.Root.SetDpi(dpi);
 
     internal bool Update()
@@ -130,11 +132,34 @@ internal sealed class SettingsUi : UiElement, IDisposable
 
     public void Dispose() => _host.Dispose();
 
-    private Toggle CreatePluginToggle(IResultProvider plugin) =>
-        new(
+    private SettingsRow CreatePluginSettings(IResultProvider plugin)
+    {
+        PluginSettings settings = _actions.Settings.GetPlugin(plugin.Id);
+        var keyword = new TextInput("No keyword")
+        {
+            Text = settings.Keyword ?? plugin.DefaultKeyword ?? string.Empty,
+            MaxWidth = 160.0f,
+            HorizontalAlignment = UiAlignment.Start,
+        };
+        keyword.TextChanged += text => UpdatePlugin(plugin, current => current with { Keyword = text.Trim() });
+
+        return new SettingsRow(
             plugin.Name,
-            !_actions.Settings.DisabledPlugins.Contains(plugin.Id),
-            enabled => _actions.SetPluginEnabled(plugin.Id, enabled));
+            new StackPanel(
+                UiOrientation.Vertical,
+                new Toggle("Enabled", settings.Enabled, enabled => UpdatePlugin(plugin, current => current with { Enabled = enabled })),
+                new Toggle(
+                    "Include in normal searches",
+                    settings.InNormalSearches,
+                    included => UpdatePlugin(plugin, current => current with { InNormalSearches = included })),
+                new SettingsRow("Keyword, typed with a space before the query to search only this", keyword))
+            {
+                Spacing = UiDesign.Spacing,
+            });
+    }
+
+    private void UpdatePlugin(IResultProvider plugin, Func<PluginSettings, PluginSettings> change) =>
+        _actions.SetPlugin(plugin, change(_actions.Settings.GetPlugin(plugin.Id)));
 
     private void RecordHotKey(HotKey hotKey)
     {

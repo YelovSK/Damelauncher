@@ -93,12 +93,97 @@ public sealed class ResultSearchTests
         enabled.Answer = _ => [new(enabled.Result("a"), 100)];
         disabled.Answer = _ => [new(disabled.Result("b"), 200)];
         using ResultSearch search = Create(enabled, disabled);
-        search.DisabledProviders = new HashSet<string> { "disabled" };
+        search.SetRouting("disabled", ProviderRouting.Default with { Enabled = false, Keyword = "d" });
 
         search.Search("q");
+        search.Search("d q");
 
         CollectionAssert.AreEqual(new[] { "a" }, Ids(LastShown));
         Assert.IsEmpty(disabled.Queries);
+    }
+
+    [TestMethod]
+    public void AKeywordAndASpaceAskOnlyItsProviderAndLeaveTheKeywordOut()
+    {
+        var programs = new FakeProvider("programs");
+        var files = new FakeProvider("files");
+        using ResultSearch search = Create(programs, files);
+        search.SetRouting("files", ProviderRouting.Default with { Keyword = "f" });
+
+        search.Search("f  report  ");
+
+        Assert.IsEmpty(programs.Queries);
+        CollectionAssert.AreEqual(new[] { "report" }, files.Queries);
+    }
+
+    [TestMethod]
+    public void KeywordsDontCareAboutCase()
+    {
+        var files = new FakeProvider("files");
+        using ResultSearch search = Create(new FakeProvider("programs"), files);
+        search.SetRouting("files", ProviderRouting.Default with { Keyword = "f" });
+
+        search.Search("F report");
+
+        CollectionAssert.AreEqual(new[] { "report" }, files.Queries);
+    }
+
+    // Otherwise a one-letter keyword would take over every query starting with that letter.
+    [TestMethod]
+    public void AKeywordWithoutASpaceAfterItIsAnOrdinaryQuery()
+    {
+        var programs = new FakeProvider("programs");
+        var files = new FakeProvider("files");
+        using ResultSearch search = Create(programs, files);
+        search.SetRouting("files", ProviderRouting.Default with { Keyword = "f" });
+
+        search.Search("f");
+        search.Search("firefox");
+
+        CollectionAssert.AreEqual(new[] { "f", "firefox" }, programs.Queries);
+        CollectionAssert.AreEqual(new[] { "f", "firefox" }, files.Queries);
+    }
+
+    [TestMethod]
+    public void AKeywordWithNothingAfterItYetShowsNothing()
+    {
+        var programs = new FakeProvider("programs");
+        var files = new FakeProvider("files");
+        using ResultSearch search = Create(programs, files);
+        search.SetRouting("files", ProviderRouting.Default with { Keyword = "f" });
+
+        search.Search("f ");
+
+        Assert.IsEmpty(LastShown);
+        Assert.IsEmpty(programs.Queries);
+        Assert.IsEmpty(files.Queries);
+    }
+
+    [TestMethod]
+    public void AProviderLeftOutOfNormalSearchesStillAnswersItsKeyword()
+    {
+        var programs = new FakeProvider("programs");
+        var files = new FakeProvider("files");
+        using ResultSearch search = Create(programs, files);
+        search.SetRouting("files", new ProviderRouting(Enabled: true, Keyword: "f", InNormalSearches: false));
+
+        search.Search("report");
+        search.Search("f report");
+
+        CollectionAssert.AreEqual(new[] { "report" }, programs.Queries);
+        CollectionAssert.AreEqual(new[] { "report" }, files.Queries);
+    }
+
+    [TestMethod]
+    public void AnUnknownKeywordIsPartOfAnOrdinaryQuery()
+    {
+        var programs = new FakeProvider("programs");
+        using ResultSearch search = Create(programs);
+        search.SetRouting("programs", ProviderRouting.Default with { Keyword = "p" });
+
+        search.Search("visual studio");
+
+        CollectionAssert.AreEqual(new[] { "visual studio" }, programs.Queries);
     }
 
     // Showing whichever provider answered first and then adding the rest made the list

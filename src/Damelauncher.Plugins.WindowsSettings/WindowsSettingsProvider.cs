@@ -12,6 +12,8 @@ internal sealed class WindowsSettingsProvider : IResultProvider
 
     public string Name => "Windows settings";
 
+    public string DefaultKeyword => "s";
+
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken)

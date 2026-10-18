@@ -30,6 +30,7 @@ internal sealed class SettingsWindow : IDisposable
         _window.Resized += HandleResize;
         _window.DpiChanged += HandleDpiChanged;
         _window.KeyPressed += HandleKeyPress;
+        _window.TextInput += HandleTextInput;
         _window.PointerInput += HandlePointerInput;
         _window.Closed += HandleClosed;
     }
@@ -58,6 +59,7 @@ internal sealed class SettingsWindow : IDisposable
         _window.Resized -= HandleResize;
         _window.DpiChanged -= HandleDpiChanged;
         _window.KeyPressed -= HandleKeyPress;
+        _window.TextInput -= HandleTextInput;
         _window.PointerInput -= HandlePointerInput;
         _window.Closed -= HandleClosed;
         _ui.Dispose();
@@ -79,6 +81,14 @@ internal sealed class SettingsWindow : IDisposable
         else if (input.Key == WindowKey.Escape)
         {
             _window.Close();
+        }
+    }
+
+    private void HandleTextInput(string text)
+    {
+        if (_ui.HandleTextInput(text))
+        {
+            _window.RequestRepaint();
         }
     }
 

@@ -17,6 +17,12 @@ internal interface IResultProvider
     /// <summary>What the provider is called in the settings.</summary>
     public string Name { get; }
 
+    /// <summary>
+    /// The keyword that, typed before a query with a space, asks only this provider, until the
+    /// user picks another. <see langword="null"/> for none.
+    /// </summary>
+    public string? DefaultKeyword => null;
+
     /// <summary>Prepares the provider, for example by indexing. Runs once, before its first query.</summary>
     public Task InitializeAsync(CancellationToken cancellationToken);
 

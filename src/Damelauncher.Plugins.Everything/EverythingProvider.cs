@@ -17,6 +17,8 @@ internal sealed class EverythingProvider : IResultProvider, IDisposable
 
     public string Name => "Everything";
 
+    public string DefaultKeyword => "f";
+
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     // Files are new on every query, unlike the other providers' results, since they come from

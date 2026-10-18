@@ -75,6 +75,8 @@ internal sealed class IniDocument
         target.Lines.Insert(lastEntry < 0 ? target.Lines.Count : lastEntry + 1, new Entry(key, value));
     }
 
+    internal IEnumerable<string> SectionNames => _sections.Skip(1).Select(section => section.Name).Distinct();
+
     internal bool HasSection(string section)
     {
         return _sections.FindIndex(1, candidate => candidate.Name == section) >= 0;
