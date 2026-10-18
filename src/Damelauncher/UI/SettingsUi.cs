@@ -1,4 +1,5 @@
 using System.Drawing;
+using Dame.UI.Animation;
 using Dame.UI.Components;
 using Dame.UI.Foundation;
 using Dame.UI.Layout;
@@ -12,14 +13,22 @@ namespace Damelauncher.UI;
 
 internal sealed class SettingsUi : UiElement, IDisposable
 {
-    internal const float WindowWidth = 480.0f;
-    internal const float WindowHeight = 640.0f;
+    internal const float WindowWidth = 600.0f;
+    internal const float WindowHeight = 520.0f;
+
+    // Pages sit side by side like one long strip, this far apart, and the pages area cuts them off.
+    private const float PageGapDips = 24.0f;
+    private static readonly UiTransition PageTransition = new(Response: 22.0);
 
     private readonly UiHost _host;
     private readonly ISettingsActions _actions;
     private readonly HotKeyChip _hotKeyChip;
     private readonly TextBlock _hotKeyError;
     private readonly PopupHost _popupHost = new();
+    // The general settings, then one page per plugin, in the order of their tabs.
+    private readonly ScrollView[] _pages;
+    private readonly Overlay _pagesArea;
+    private int _shownPage;
 
     internal SettingsUi(
         ID2D1DeviceContext deviceContext,
@@ -42,44 +51,50 @@ internal sealed class SettingsUi : UiElement, IDisposable
             ShowHotKeyError(actions.Settings.HotKey);
         }
 
-        var theme = new SettingsRow(
-            "Theme",
-            new Dropdown<ThemeId>(
-                _popupHost,
-                [.. Themes.All.Select(option => new Choice<ThemeId>(option.DisplayName, option.Id))],
-                actions.Settings.Theme,
-                value => actions.Theme = value));
-        var general = new SettingsGroup(
-            "General",
-            theme,
+        ScrollView general = Page(
+            new SettingsRow(
+                "Theme",
+                new Dropdown<ThemeId>(
+                    _popupHost,
+                    [.. Themes.All.Select(option => new Choice<ThemeId>(option.DisplayName, option.Id))],
+                    actions.Settings.Theme,
+                    value => actions.Theme = value)),
             new SettingsRow(
                 "Hotkey",
                 new StackPanel(UiOrientation.Vertical, _hotKeyChip, _hotKeyError) { Spacing = UiDesign.SmallSpacing }),
-            new StackPanel(
-                UiOrientation.Vertical,
+            Described(
                 new Toggle("Open with the Windows key", actions.OpensWithWindowsKey, value => actions.OpensWithWindowsKey = value),
-                new TextBlock(
-                    "Tapping it on its own opens the launcher instead of Start. Shortcuts like Win+E still work.",
-                    UiTextStyle.Body,
-                    UiTextTone.Secondary,
-                    UiTextWrapping.Wrap))
-            {
-                Spacing = UiDesign.SmallSpacing,
-            },
+                "Tapping it on its own opens the launcher instead of Start. Shortcuts like Win+E still work."),
             new Toggle("Start with Windows", actions.StartsWithWindows, value => actions.StartsWithWindows = value));
-        var plugins = new SettingsGroup(
-            "Plugins",
-            [.. actions.Plugins.Select(CreatePluginSettings)]);
-        var title = new TextBlock("Settings", UiTextStyle.Heading, UiTextTone.Primary, UiTextWrapping.NoWrap);
-
-        AddChild(new ScrollView(new StackPanel(UiOrientation.Vertical, title, general, plugins)
+        _pages = [general, .. actions.Plugins.Select(CreatePluginPage)];
+        _pagesArea = new Overlay(_pages)
         {
-            Spacing = UiDesign.LargeSpacing * 1.5f,
-            Margin = new UiThickness(24.0f),
-        }));
+            Margin = new UiThickness(0.0f, UiDesign.SmallSpacing, 0.0f, 0.0f),
+        };
+        var tabs = new TabStrip<int>(
+            [new("General", 0), .. actions.Plugins.Select((plugin, index) => new Choice<int>(plugin.Name, index + 1))],
+            0,
+            SelectPage);
+
+        AddChild(new StackPanel(
+            UiOrientation.Vertical,
+            new TextBlock("Settings", UiTextStyle.Heading, UiTextTone.Primary, UiTextWrapping.NoWrap),
+            tabs,
+            _pagesArea,
+            new TextBlock("Changes are saved automatically.", UiTextStyle.Body, UiTextTone.Secondary, UiTextWrapping.Wrap))
+        {
+            Spacing = 12.0f,
+            Fill = _pagesArea,
+            Margin = new UiThickness(24.0f, 20.0f, 24.0f, 12.0f),
+        });
         // Above the settings, where the theme list opens.
         AddChild(_popupHost);
-        _host.Root.SetFocus(_hotKeyChip);
+        for (int index = 1; index < _pages.Length; index++)
+        {
+            _pages[index].IsPresent = false;
+        }
+
+        _host.Root.SetFocus(tabs.SelectedSegment);
     }
 
     internal event Action? Invalidated
@@ -132,7 +147,22 @@ internal sealed class SettingsUi : UiElement, IDisposable
 
     public void Dispose() => _host.Dispose();
 
-    private SettingsRow CreatePluginSettings(IResultProvider plugin)
+    private static ScrollView Page(params UiElement[] settings) =>
+        new(new StackPanel(UiOrientation.Vertical, settings) { Spacing = UiDesign.LargeSpacing })
+        {
+            Transition = PageTransition,
+        };
+
+    private static StackPanel Described(UiElement setting, string description) =>
+        new(
+            UiOrientation.Vertical,
+            setting,
+            new TextBlock(description, UiTextStyle.Body, UiTextTone.Secondary, UiTextWrapping.Wrap))
+        {
+            Spacing = UiDesign.SmallSpacing,
+        };
+
+    private ScrollView CreatePluginPage(IResultProvider plugin)
     {
         PluginSettings settings = _actions.Settings.GetPlugin(plugin.Id);
         var keyword = new TextInput("No keyword")
@@ -143,19 +173,41 @@ internal sealed class SettingsUi : UiElement, IDisposable
         };
         keyword.TextChanged += text => UpdatePlugin(plugin, current => current with { Keyword = text.Trim() });
 
-        return new SettingsRow(
-            plugin.Name,
-            new StackPanel(
-                UiOrientation.Vertical,
-                new Toggle("Enabled", settings.Enabled, enabled => UpdatePlugin(plugin, current => current with { Enabled = enabled })),
+        return Page(
+            new Toggle("Enabled", settings.Enabled, enabled => UpdatePlugin(plugin, current => current with { Enabled = enabled })),
+            Described(
                 new Toggle(
                     "Include in normal searches",
                     settings.InNormalSearches,
                     included => UpdatePlugin(plugin, current => current with { InNormalSearches = included })),
-                new SettingsRow("Keyword, typed with a space before the query to search only this", keyword))
+                "When off, it only answers queries that start with its keyword."),
+            new SettingsRow(
+                "Keyword",
+                Described(keyword, $"Typed with a space before a query, it searches only {plugin.Name}.")));
+    }
+
+    private void SelectPage(int page)
+    {
+        _popupHost.Close();
+        // The new page slides in from the side its tab is on, and the old one leaves the other way.
+        float slide = Math.Sign(page - _shownPage) * (_pagesArea.Bounds.Width + PageGapDips);
+        for (int index = 0; index < _pages.Length; index++)
+        {
+            ScrollView candidate = _pages[index];
+            bool present = index == page;
+            if (candidate.IsPresent == present)
             {
-                Spacing = UiDesign.Spacing,
-            });
+                continue;
+            }
+
+            candidate.Transition = PageTransition with
+            {
+                HiddenOffset = new PointF((present ? 1.0f : -1.0f) * slide, 0.0f),
+            };
+            candidate.IsPresent = present;
+        }
+
+        _shownPage = page;
     }
 
     private void UpdatePlugin(IResultProvider plugin, Func<PluginSettings, PluginSettings> change) =>
