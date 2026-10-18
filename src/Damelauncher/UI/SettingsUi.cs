@@ -46,6 +46,17 @@ internal sealed class SettingsUi : UiElement, IDisposable
             new SettingsRow(
                 "Hotkey",
                 new StackPanel(UiOrientation.Vertical, _hotKeyChip, _hotKeyError) { Spacing = UiDesign.SmallSpacing }),
+            new StackPanel(
+                UiOrientation.Vertical,
+                new Toggle("Open with the Windows key", actions.OpensWithWindowsKey, value => actions.OpensWithWindowsKey = value),
+                new TextBlock(
+                    "Tapping it on its own opens the launcher instead of Start. Shortcuts like Win+E still work.",
+                    UiTextStyle.Body,
+                    UiTextTone.Secondary,
+                    UiTextWrapping.Wrap))
+            {
+                Spacing = UiDesign.SmallSpacing,
+            },
             new Toggle("Start with Windows", actions.StartsWithWindows, value => actions.StartsWithWindows = value));
         var plugins = new SettingsGroup(
             "Plugins",

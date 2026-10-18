@@ -25,6 +25,7 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
     private readonly ResultSearch _search;
     private readonly TrayIcon _trayIcon;
     private SettingsWindow? _settingsWindow;
+    private WindowsKeyTap? _windowsKeyTap;
     private bool _hotKeyRegistered;
 
     internal LauncherApp()
@@ -64,6 +65,7 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _window.HotKeyPressed += HandleHotKey;
         _window.Deactivated += _window.Hide;
         RegisterHotKey(_settings.Current.HotKey);
+        WatchWindowsKey(_settings.Current.OpenWithWindowsKey);
         // Posted to the window, which reports a failure the way it does its own, instead of it
         // ending the process from the tray icon's window procedure.
         _trayIcon = new TrayIcon(
@@ -95,6 +97,16 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
             {
                 StartupRegistration.Unregister(AppName);
             }
+        }
+    }
+
+    bool ISettingsActions.OpensWithWindowsKey
+    {
+        get => _settings.Current.OpenWithWindowsKey;
+        set
+        {
+            _settings.Update(_settings.Current with { OpenWithWindowsKey = value });
+            WatchWindowsKey(value);
         }
     }
 
@@ -161,6 +173,7 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _window.HotKeyPressed -= HandleHotKey;
         _window.Deactivated -= _window.Hide;
         _settingsWindow?.Dispose();
+        _windowsKeyTap?.Dispose();
         _trayIcon.Dispose();
         _search.Dispose();
         _ui.Dispose();
@@ -200,6 +213,20 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         }
     }
 
+    private void WatchWindowsKey(bool watch)
+    {
+        if (watch)
+        {
+            // The tap arrives inside the keyboard hook, which mustn't keep the keyboard waiting.
+            _windowsKeyTap ??= new WindowsKeyTap(() => _window.Post(Toggle));
+        }
+        else
+        {
+            _windowsKeyTap?.Dispose();
+            _windowsKeyTap = null;
+        }
+    }
+
     private bool RegisterHotKey(HotKey hotKey)
     {
         UnregisterHotKey();
@@ -235,11 +262,14 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
 
     private void HandleHotKey(int id)
     {
-        if (id != ToggleHotKeyId)
+        if (id == ToggleHotKeyId)
         {
-            return;
+            Toggle();
         }
+    }
 
+    private void Toggle()
+    {
         if (_window.IsVisible)
         {
             _window.Hide();

@@ -16,6 +16,8 @@ internal interface ISettingsActions
 
     public bool StartsWithWindows { get; set; }
 
+    public bool OpensWithWindowsKey { get; set; }
+
     /// <returns>Whether the hotkey could be registered. When it couldn't, the previous one stays.</returns>
     public bool TrySetHotKey(HotKey hotKey);
 

@@ -30,6 +30,8 @@ Each window has its own `AppWindow` and `D2DRenderer`, all on one thread. The la
 
 `SettingsWindow` opens from the tray menu or the "Damelauncher Settings" result and is rebuilt each time. Its `SettingsUi` changes nothing itself: it asks `LauncherApp` through `ISettingsActions`, which applies and saves each change at once. A new hotkey only replaces the old one once it registers, since another app may hold it, and while one is being recorded the current one is released, so pressing it reaches the settings window. When the hotkey can't be registered at startup, the settings open instead of the launcher, saying why.
 
+Tapping the Windows key can open the launcher too, as a separate setting next to the hotkey, since the system can't register a modifier on its own as a hotkey. `WindowsKeyTap` watches every key through a low-level keyboard hook, and when Windows is pressed and released with nothing in between, it sends an unassigned key before the release, so the shell takes the tap for a combination and leaves Start closed. The hook runs on the window thread's message loop and only posts the tap, since Windows removes a hook that keeps the keyboard waiting.
+
 ## Plugins
 
 A plugin is an `IResultProvider`. `ResultSearch` initializes every provider once at startup, then sends each query to all of them. A new query cancels the previous one. Results merge by score as each provider answers, so a slow provider doesn't hold back a fast one, and the previous results stay on screen until the first answer to a new query arrives.
