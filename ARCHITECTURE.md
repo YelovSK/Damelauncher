@@ -18,7 +18,7 @@ Damelauncher -> Dame.UI -> Dame.Win32
 
 ## Runtime flow
 
-`LauncherApp` is the composition root. It creates a hidden popup `AppWindow`, the `D2DRenderer`, `LauncherUi`, and `ResultSearch` with the list of providers, and registers a global hotkey on the window. The hotkey toggles the window, which is centered on the monitor under the cursor each time it opens. Escape, losing focus, or running a result hides it again; the process keeps running in the background. A `TrayIcon` opens it too, and its menu can quit the launcher.
+`LauncherApp` is the composition root. It creates a hidden popup `AppWindow`, the `D2DRenderer`, `LauncherUi`, and `ResultSearch` with the list of providers, and registers a global hotkey on the window. The hotkey toggles the window, which is centered on the monitor under the cursor each time it opens. Dismissing it, losing focus, or running a result hides it again; the process keeps running in the background. A `TrayIcon` opens it too, and its menu can quit the launcher.
 
 Rendering is demand-driven, as in Dameview: input and state changes request frames, and nothing renders while nothing changes.
 
@@ -41,6 +41,8 @@ Providers are used on the window thread, which awaits resume on through `WindowS
 A `LaunchResult` is plain data plus the action that runs it, which the provider supplies as a closure. Results score with the shared `FuzzyMatcher`, so scores from different providers compare on one scale.
 
 A result names its icon by where the shell finds it, such as a file path or `shell:AppsFolder\…`, rather than carrying a bitmap, so providers never touch rendering. `ResultIcons` loads the icons of the rows in sight on COM workers through `ShellIcons`, uploads them to Direct2D on the window thread, and keeps the most recently used ones. Rows draw without their icon until it arrives.
+
+A result can also have an actions menu: other things to do with it, like running it as administrator or copying its path. Providers offer them through `IResultProvider.GetActions`, asked only when the menu opens, and `ResultSearch` adds forgetting a result's launches. Actions are `LaunchResult`s too, shown in place of the search results until the user goes back or types. Running one doesn't count as launching the result.
 
 ## Ranking
 

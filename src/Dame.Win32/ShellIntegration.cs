@@ -32,7 +32,7 @@ internal static class ShellIntegration
         var thread = new Thread(() => ShowInFolderBlocking(path))
         {
             IsBackground = true,
-            Name = "Dameview show in folder",
+            Name = "Show in folder",
         };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();

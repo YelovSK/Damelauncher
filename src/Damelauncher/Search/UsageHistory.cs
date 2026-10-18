@@ -57,13 +57,26 @@ internal sealed class UsageHistory
     {
         DateTime now = DateTime.UtcNow;
         _entries[id] = new Entry(GetScore(id, now) + 1.0, now);
+        TrySave(now);
+    }
+
+    internal void Forget(string id)
+    {
+        if (_entries.Remove(id))
+        {
+            TrySave(DateTime.UtcNow);
+        }
+    }
+
+    private void TrySave(DateTime now)
+    {
         try
         {
             Save(now);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // The launch still counts for this session.
+            // The change still counts for this session.
         }
     }
 

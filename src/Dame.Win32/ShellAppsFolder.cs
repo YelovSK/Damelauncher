@@ -48,13 +48,18 @@ internal static class ShellAppsFolder
     /// <summary>The app's location in the shell, where its icon can be found too.</summary>
     internal static string GetPath(string parsingName) => FolderPath + parsingName;
 
-    internal static void Launch(string parsingName)
+    internal static void Launch(string parsingName, bool asAdministrator = false)
     {
         using var process = Process.Start(new ProcessStartInfo(GetPath(parsingName))
         {
             UseShellExecute = true,
+            Verb = asAdministrator ? "runas" : null,
         });
     }
+
+    /// <summary>Whether the app comes from a package, which can't run as administrator.</summary>
+    /// <remarks>A packaged app's id is its package family name and app id, joined by "!".</remarks>
+    internal static bool IsPackaged(string parsingName) => parsingName.Contains('!', StringComparison.Ordinal);
 
     private static unsafe string? GetDisplayName(IShellItem item, SIGDN kind)
     {

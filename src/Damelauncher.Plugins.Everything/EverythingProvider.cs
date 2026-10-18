@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Dame.Win32;
 
 namespace Damelauncher.Plugins.Everything;
 
@@ -37,6 +38,22 @@ internal sealed class EverythingProvider : IResultProvider, IDisposable
                 ScoreOffset + (FuzzyMatcher.Score(query, item.Name) ?? 0),
                 () => Open(item.FullPath))),
         ];
+    }
+
+    public IReadOnlyList<LaunchResult> GetActions(LaunchResult result)
+    {
+        string path = result.Id;
+        var actions = new List<LaunchResult>
+        {
+            new("folder", "Open containing folder", result.Title, null, 0, () => ShellIntegration.ShowInFolder(path)),
+            new("copy", "Copy path", path, null, 0, () => Win32Clipboard.TrySetText(path)),
+        };
+        if (File.Exists(path))
+        {
+            actions.Add(new("openwith", "Open with…", result.Title, null, 0, () => ShellIntegration.TryShowOpenWith(0, path)));
+        }
+
+        return actions;
     }
 
     public void Dispose() => _client.Dispose();

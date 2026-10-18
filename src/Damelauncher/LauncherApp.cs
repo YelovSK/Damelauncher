@@ -57,6 +57,7 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _ui.Invalidated += _window.RequestRepaint;
         _ui.CursorChanged += _window.ApplyCursor;
         _ui.ResultInvoked += Launch;
+        _ui.ActionsRequested += ShowActions;
         _window.RenderFrame += HandleRenderFrame;
         _window.Resized += HandleResize;
         _window.DpiChanged += HandleDpiChanged;
@@ -174,6 +175,7 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _ui.Invalidated -= _window.RequestRepaint;
         _ui.CursorChanged -= _window.ApplyCursor;
         _ui.ResultInvoked -= Launch;
+        _ui.ActionsRequested -= ShowActions;
         _ui.QueryChanged -= _search.Search;
         _search.ResultsChanged -= ShowResults;
         _window.RenderFrame -= HandleRenderFrame;
@@ -258,13 +260,34 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _window.SetSize(LauncherUi.WindowWidth, _ui.WindowHeight);
     }
 
+    private void ShowActions(LaunchResult result)
+    {
+        IReadOnlyList<LaunchResult> actions = _search.GetActions(result);
+        if (actions.Count > 0)
+        {
+            _ui.ShowActions(result, actions);
+            _window.SetSize(LauncherUi.WindowWidth, _ui.WindowHeight);
+        }
+    }
+
+    private void HideActions()
+    {
+        _ui.HideActions();
+        _window.SetSize(LauncherUi.WindowWidth, _ui.WindowHeight);
+    }
+
     private void Launch(LaunchResult result)
     {
+        // Only opening a result itself counts toward its ranking, not copying its path and the like.
+        bool isAction = _ui.ActionsTarget is not null;
         _window.Hide();
         try
         {
             result.Execute();
-            _search.RecordLaunch(result);
+            if (!isAction)
+            {
+                _search.RecordLaunch(result);
+            }
         }
         catch (Win32Exception)
         {
@@ -296,7 +319,15 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
     {
         if (input.Key == WindowKey.Escape)
         {
-            _window.Hide();
+            if (_ui.ActionsTarget is not null)
+            {
+                HideActions();
+            }
+            else
+            {
+                _window.Hide();
+            }
+
             return;
         }
 

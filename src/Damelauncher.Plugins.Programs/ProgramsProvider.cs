@@ -39,4 +39,18 @@ internal sealed class ProgramsProvider : IResultProvider
 
         return ValueTask.FromResult<IReadOnlyList<LaunchResult>>(results);
     }
+
+    public IReadOnlyList<LaunchResult> GetActions(LaunchResult result) =>
+        ShellAppsFolder.IsPackaged(result.Id)
+            ? []
+            :
+            [
+                new LaunchResult(
+                    "runas",
+                    "Run as administrator",
+                    result.Title,
+                    null,
+                    0,
+                    () => ShellAppsFolder.Launch(result.Id, asAdministrator: true)),
+            ];
 }

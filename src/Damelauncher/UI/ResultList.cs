@@ -14,25 +14,35 @@ internal sealed class ResultList : UiElement
 {
     internal const float RowHeight = 48.0f;
     private const float RowPadding = 12.0f;
-    private const float TextLeft = RowPadding + ResultIcons.Size + RowPadding;
     private static readonly UiFont TitleFont = new(UiDesign.BodyFontSize, FontWeight.Medium, Ellipsis: true);
     private static readonly UiFont SubtitleFont = new(UiDesign.CaptionFontSize, Ellipsis: true);
 
     private readonly ResultIcons _icons;
     private IReadOnlyList<LaunchResult> _results = [];
     private int _selectedIndex;
+    private float _textLeft = RowPadding;
 
     internal ResultList(ResultIcons icons) => _icons = icons;
 
     internal event Action<LaunchResult>? ResultInvoked;
 
+    /// <summary>A right-click on a result, which asks for its actions.</summary>
+    internal event Action<LaunchResult>? ActionsRequested;
+
     internal override WindowCursor Cursor => WindowCursor.Pointer;
 
     internal int Count => _results.Count;
 
+    internal LaunchResult? SelectedResult => _results.Count > 0 ? _results[_selectedIndex] : null;
+
     internal void SetResults(IReadOnlyList<LaunchResult> results)
     {
         _results = results;
+        // A column for icons only when some result has one, and then for every row, so the
+        // titles line up whether or not their result has an icon.
+        _textLeft = results.Any(result => result.IconSource is not null)
+            ? RowPadding + ResultIcons.Size + RowPadding
+            : RowPadding;
         _selectedIndex = 0;
         InvalidateLayout();
     }
@@ -59,7 +69,8 @@ internal sealed class ResultList : UiElement
 
     internal override UiPointerResult OnPointerEvent(in WindowPointerEvent input)
     {
-        if (input.Kind != WindowPointerEventKind.Pressed || input.Button != PointerButton.Primary)
+        if (input.Kind != WindowPointerEventKind.Pressed
+            || input.Button is not (PointerButton.Primary or PointerButton.Secondary))
         {
             return default;
         }
@@ -69,7 +80,14 @@ internal sealed class ResultList : UiElement
         {
             _selectedIndex = index;
             InvalidateVisual();
-            InvokeSelected();
+            if (input.Button == PointerButton.Primary)
+            {
+                InvokeSelected();
+            }
+            else
+            {
+                ActionsRequested?.Invoke(_results[index]);
+            }
         }
 
         return new UiPointerResult(Consumed: true);
@@ -103,7 +121,6 @@ internal sealed class ResultList : UiElement
                 context.Palette.ControlHover);
         }
 
-        // Results without an icon keep its space, so every title starts in the same column.
         if (result.IconSource is { } source && _icons.Get(source) is { } icon)
         {
             float inset = (RowHeight - ResultIcons.Size) / 2.0f;
@@ -112,16 +129,16 @@ internal sealed class ResultList : UiElement
                 new RectangleF(row.X + RowPadding, row.Y + inset, ResultIcons.Size, ResultIcons.Size));
         }
 
-        float textWidth = MathF.Max(0.0f, row.Width - TextLeft - RowPadding);
+        float textWidth = MathF.Max(0.0f, row.Width - _textLeft - RowPadding);
         context.DrawText(
             result.Title,
             TitleFont,
-            new Rect(row.X + TextLeft, row.Y + 4.0f, textWidth, 22.0f),
+            new Rect(row.X + _textLeft, row.Y + 4.0f, textWidth, 22.0f),
             context.Palette.PrimaryText);
         context.DrawText(
             result.Subtitle,
             SubtitleFont,
-            new Rect(row.X + TextLeft, row.Y + 24.0f, textWidth, 18.0f),
+            new Rect(row.X + _textLeft, row.Y + 24.0f, textWidth, 18.0f),
             context.Palette.SecondaryText);
     }
 }

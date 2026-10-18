@@ -21,6 +21,8 @@ internal sealed class LauncherUi : UiElement, IDisposable
     private readonly TextInput _query;
     private readonly ResultList _results;
     private readonly ScrollView _resultsView;
+    // The latest search results, kept while an actions menu stands in for them.
+    private IReadOnlyList<LaunchResult> _searchResults = [];
 
     internal LauncherUi(
         ID2D1DeviceContext deviceContext,
@@ -33,6 +35,9 @@ internal sealed class LauncherUi : UiElement, IDisposable
         _icons = new ResultIcons(deviceContext, dpi, _host.Root.InvalidateVisual);
         _results = new ResultList(_icons);
         _resultsView = new ScrollView(_results) { IsVisible = false };
+        // Typing goes back to searching. Subscribed first, so it's done before the search starts.
+        _query.TextChanged += _ => ActionsTarget = null;
+        _results.ActionsRequested += RequestActions;
 
         AddChild(new StackPanel(UiOrientation.Vertical, _query, _resultsView)
         {
@@ -67,6 +72,12 @@ internal sealed class LauncherUi : UiElement, IDisposable
         remove => _results.ResultInvoked -= value;
     }
 
+    /// <summary>Shift+Enter, Right arrow at the end of the query, or a right-click on a search result, which asks for its actions menu.</summary>
+    internal event Action<LaunchResult>? ActionsRequested;
+
+    /// <summary>The result whose actions are shown in place of the search results, if any.</summary>
+    internal LaunchResult? ActionsTarget { get; private set; }
+
     internal UiTheme Palette
     {
         get => _host.Palette;
@@ -82,11 +93,26 @@ internal sealed class LauncherUi : UiElement, IDisposable
     /// <summary>The height that fits the current results, up to <see cref="MaxWindowHeight"/>.</summary>
     internal float WindowHeight => GetWindowHeight(Math.Min(_results.Count, MaxVisibleRows));
 
+    /// <summary>Shows a search's results, unless an actions menu is open, which they wait behind.</summary>
     internal void SetResults(IReadOnlyList<LaunchResult> results)
     {
-        _results.SetResults(results);
-        _resultsView.SetScrollOffset(0.0f);
-        _resultsView.IsVisible = results.Count > 0;
+        _searchResults = results;
+        if (ActionsTarget is null)
+        {
+            ShowList(results);
+        }
+    }
+
+    internal void ShowActions(LaunchResult target, IReadOnlyList<LaunchResult> actions)
+    {
+        ActionsTarget = target;
+        ShowList(actions);
+    }
+
+    internal void HideActions()
+    {
+        ActionsTarget = null;
+        ShowList(_searchResults);
     }
 
     /// <summary>Clears the query, so the launcher opens fresh.</summary>
@@ -100,6 +126,14 @@ internal sealed class LauncherUi : UiElement, IDisposable
     {
         switch (input.Key)
         {
+            case WindowKey.Enter when input.Shift:
+                if (_results.SelectedResult is { } selected)
+                {
+                    RequestActions(selected);
+                }
+
+                return true;
+
             case WindowKey.Up:
                 _results.MoveSelection(-1);
                 return true;
@@ -117,8 +151,21 @@ internal sealed class LauncherUi : UiElement, IDisposable
         }
     }
 
-    internal bool HandleKey(WindowKeyEvent input) =>
-        _host.Root.HandleKey(input, this, wrapFocus: true, directionalNavigation: false);
+    internal bool HandleKey(WindowKeyEvent input)
+    {
+        // Right arrow moves the caret until there's nowhere further to go, then opens the
+        // selected result's actions. The query box would otherwise take the key first.
+        if (input is { Key: WindowKey.Right, Shift: false, Control: false, Alt: false }
+            && _query.CaretIndex == _query.Text.Length
+            && _query.SelectionStart == _query.SelectionEnd
+            && _results.SelectedResult is { } selected)
+        {
+            RequestActions(selected);
+            return true;
+        }
+
+        return _host.Root.HandleKey(input, this, wrapFocus: true, directionalNavigation: false);
+    }
 
     internal bool HandleTextInput(string text) => _host.Root.HandleTextInput(text);
 
@@ -149,6 +196,22 @@ internal sealed class LauncherUi : UiElement, IDisposable
     {
         _icons.Dispose();
         _host.Dispose();
+    }
+
+    private void ShowList(IReadOnlyList<LaunchResult> results)
+    {
+        _results.SetResults(results);
+        _resultsView.SetScrollOffset(0.0f);
+        _resultsView.IsVisible = results.Count > 0;
+    }
+
+    // An action has no actions of its own.
+    private void RequestActions(LaunchResult result)
+    {
+        if (ActionsTarget is null)
+        {
+            ActionsRequested?.Invoke(result);
+        }
     }
 
     private static float GetWindowHeight(int rows) =>

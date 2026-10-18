@@ -69,6 +69,36 @@ internal sealed class ResultSearch : IDisposable
     /// <param name="result">A result from <see cref="ResultsChanged"/>.</param>
     internal void RecordLaunch(LaunchResult result) => _history.RecordLaunch(result.Id);
 
+    /// <summary>
+    /// The result's actions menu: what its provider offers for it, and forgetting its launches
+    /// when it has any.
+    /// </summary>
+    /// <param name="result">A result from <see cref="ResultsChanged"/>.</param>
+    internal IReadOnlyList<LaunchResult> GetActions(LaunchResult result)
+    {
+        var actions = new List<LaunchResult>();
+        // Undoes the qualification from Rank, since the provider knows the result by its own id.
+        int separator = result.Id.IndexOf(':', StringComparison.Ordinal);
+        string providerId = result.Id[..separator];
+        if (_providers.FirstOrDefault(provider => provider.Id == providerId) is { } owner)
+        {
+            actions.AddRange(owner.GetActions(result with { Id = result.Id[(separator + 1)..] }));
+        }
+
+        if (_history.GetScore(result.Id, DateTime.UtcNow) > 0.0)
+        {
+            actions.Add(new LaunchResult(
+                "forget",
+                "Forget launches",
+                result.Title,
+                null,
+                0,
+                () => _history.Forget(result.Id)));
+        }
+
+        return actions;
+    }
+
     public void Dispose()
     {
         _lifetime.Cancel();

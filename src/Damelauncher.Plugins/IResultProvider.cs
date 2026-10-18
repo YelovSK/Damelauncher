@@ -22,4 +22,11 @@ internal interface IResultProvider
 
     /// <summary>The results for a trimmed, non-empty query. A newer query cancels this one.</summary>
     public ValueTask<IReadOnlyList<LaunchResult>> QueryAsync(string query, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// What else can be done with one of this provider's results, such as running it as
+    /// administrator, which the launcher offers in the result's actions menu.
+    /// </summary>
+    /// <param name="result">One of this provider's results, with the id the provider gave it.</param>
+    public IReadOnlyList<LaunchResult> GetActions(LaunchResult result) => [];
 }
