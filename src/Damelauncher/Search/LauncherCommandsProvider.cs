@@ -6,14 +6,15 @@ namespace Damelauncher.Search;
 internal sealed class LauncherCommandsProvider : IResultProvider
 {
     private readonly LaunchResult[] _commands;
+    private readonly List<ScoredResult> _matches = [];
 
     internal LauncherCommandsProvider(Action openSettings, Action quit)
     {
         string? icon = Environment.ProcessPath;
         _commands =
         [
-            new LaunchResult("settings", "Damelauncher Settings", "Hotkey, plugins and startup", icon, 0, openSettings),
-            new LaunchResult("quit", "Quit Damelauncher", "Exit the launcher", icon, 0, quit),
+            new LaunchResult(this, "settings", "Damelauncher Settings", "Hotkey, plugins and startup", icon, openSettings),
+            new LaunchResult(this, "quit", "Quit Damelauncher", "Exit the launcher", icon, quit),
         ];
     }
 
@@ -23,17 +24,17 @@ internal sealed class LauncherCommandsProvider : IResultProvider
 
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public ValueTask<IReadOnlyList<LaunchResult>> QueryAsync(string query, CancellationToken cancellationToken)
+    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken)
     {
-        var results = new List<LaunchResult>();
+        _matches.Clear();
         foreach (LaunchResult command in _commands)
         {
             if (FuzzyMatcher.Score(query, command.Title) is { } score)
             {
-                results.Add(command with { Score = score });
+                _matches.Add(new ScoredResult(command, score));
             }
         }
 
-        return ValueTask.FromResult<IReadOnlyList<LaunchResult>>(results);
+        return ValueTask.FromResult<IReadOnlyList<ScoredResult>>(_matches);
     }
 }

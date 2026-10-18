@@ -5,7 +5,8 @@ namespace Damelauncher.Plugins.Programs;
 /// <summary>Finds installed programs and apps, as the Start menu lists them.</summary>
 internal sealed class ProgramsProvider : IResultProvider
 {
-    private ShellApp[] _apps = [];
+    private readonly List<ScoredResult> _matches = [];
+    private LaunchResult[] _programs = [];
 
     public string Id => "programs";
 
@@ -17,27 +18,21 @@ internal sealed class ProgramsProvider : IResultProvider
         List<ShellApp> apps = await worker.Enqueue(
             static (_, _) => ShellAppsFolder.Enumerate(),
             cancellationToken: cancellationToken);
-        _apps = [.. apps];
+        _programs = [.. apps.Select(CreateResult)];
     }
 
-    public ValueTask<IReadOnlyList<LaunchResult>> QueryAsync(string query, CancellationToken cancellationToken)
+    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken)
     {
-        var results = new List<LaunchResult>();
-        foreach (ShellApp app in _apps)
+        _matches.Clear();
+        foreach (LaunchResult program in _programs)
         {
-            if (FuzzyMatcher.Score(query, app.Name) is { } score)
+            if (FuzzyMatcher.Score(query, program.Title) is { } score)
             {
-                results.Add(new LaunchResult(
-                    app.ParsingName,
-                    app.Name,
-                    "App",
-                    ShellAppsFolder.GetPath(app.ParsingName),
-                    score,
-                    () => ShellAppsFolder.Launch(app.ParsingName)));
+                _matches.Add(new ScoredResult(program, score));
             }
         }
 
-        return ValueTask.FromResult<IReadOnlyList<LaunchResult>>(results);
+        return ValueTask.FromResult<IReadOnlyList<ScoredResult>>(_matches);
     }
 
     public IReadOnlyList<LaunchResult> GetActions(LaunchResult result) =>
@@ -46,11 +41,20 @@ internal sealed class ProgramsProvider : IResultProvider
             :
             [
                 new LaunchResult(
+                    this,
                     "runas",
                     "Run as administrator",
                     result.Title,
                     null,
-                    0,
                     () => ShellAppsFolder.Launch(result.Id, asAdministrator: true)),
             ];
+
+    private LaunchResult CreateResult(ShellApp app) =>
+        new(
+            this,
+            app.ParsingName,
+            app.Name,
+            "App",
+            ShellAppsFolder.GetPath(app.ParsingName),
+            () => ShellAppsFolder.Launch(app.ParsingName));
 }

@@ -19,7 +19,9 @@ internal sealed class EverythingProvider : IResultProvider, IDisposable
 
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public async ValueTask<IReadOnlyList<LaunchResult>> QueryAsync(string query, CancellationToken cancellationToken)
+    // Files are new on every query, unlike the other providers' results, since they come from
+    // another process. Reusing their list wouldn't save much next to the trip there.
+    public async ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken)
     {
         if (await _client.SearchAsync(query, MaxResults, cancellationToken) is not { } items)
         {
@@ -28,16 +30,21 @@ internal sealed class EverythingProvider : IResultProvider, IDisposable
 
         // Everything matches by its own syntax, where "report pdf" finds "report_2024.pdf", so a
         // name the fuzzy matcher can't place still counts, just below one it can.
-        return
-        [
-            .. items.Select(item => new LaunchResult(
+        var results = new ScoredResult[items.Length];
+        for (int index = 0; index < items.Length; index++)
+        {
+            EverythingItem item = items[index];
+            var result = new LaunchResult(
+                this,
                 item.FullPath,
                 item.Name,
                 Path.GetDirectoryName(item.FullPath) ?? item.FullPath,
                 item.FullPath,
-                ScoreOffset + (FuzzyMatcher.Score(query, item.Name) ?? 0),
-                () => Open(item.FullPath))),
-        ];
+                () => Open(item.FullPath));
+            results[index] = new ScoredResult(result, ScoreOffset + (FuzzyMatcher.Score(query, item.Name) ?? 0));
+        }
+
+        return results;
     }
 
     public IReadOnlyList<LaunchResult> GetActions(LaunchResult result)
@@ -45,12 +52,12 @@ internal sealed class EverythingProvider : IResultProvider, IDisposable
         string path = result.Id;
         var actions = new List<LaunchResult>
         {
-            new("folder", "Open containing folder", result.Title, null, 0, () => ShellIntegration.ShowInFolder(path)),
-            new("copy", "Copy path", path, null, 0, () => Win32Clipboard.TrySetText(path)),
+            new(this, "folder", "Open containing folder", result.Title, null, () => ShellIntegration.ShowInFolder(path)),
+            new(this, "copy", "Copy path", path, null, () => Win32Clipboard.TrySetText(path)),
         };
         if (File.Exists(path))
         {
-            actions.Add(new("openwith", "Open with…", result.Title, null, 0, () => ShellIntegration.TryShowOpenWith(0, path)));
+            actions.Add(new(this, "openwith", "Open with…", result.Title, null, () => ShellIntegration.TryShowOpenWith(0, path)));
         }
 
         return actions;

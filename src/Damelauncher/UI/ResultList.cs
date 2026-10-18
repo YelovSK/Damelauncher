@@ -40,9 +40,16 @@ internal sealed class ResultList : UiElement
         _results = results;
         // A column for icons only when some result has one, and then for every row, so the
         // titles line up whether or not their result has an icon.
-        _textLeft = results.Any(result => result.IconSource is not null)
-            ? RowPadding + ResultIcons.Size + RowPadding
-            : RowPadding;
+        _textLeft = RowPadding;
+        for (int index = 0; index < results.Count; index++)
+        {
+            if (results[index].IconSource is not null)
+            {
+                _textLeft = RowPadding + ResultIcons.Size + RowPadding;
+                break;
+            }
+        }
+
         _selectedIndex = 0;
         InvalidateLayout();
     }

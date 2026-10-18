@@ -3,7 +3,10 @@ namespace Damelauncher.Plugins.WindowsSettings;
 /// <summary>Finds Settings pages and power commands such as sleep or restart.</summary>
 internal sealed class WindowsSettingsProvider : IResultProvider
 {
-    private readonly SettingsEntry[] _entries = [.. PowerCommands.Create(), .. SettingsPages.Create()];
+    private readonly SettingsEntry[] _entries;
+    private readonly List<ScoredResult> _matches = [];
+
+    internal WindowsSettingsProvider() => _entries = [.. PowerCommands.Create(this), .. SettingsPages.Create(this)];
 
     public string Id => "settings";
 
@@ -11,17 +14,17 @@ internal sealed class WindowsSettingsProvider : IResultProvider
 
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public ValueTask<IReadOnlyList<LaunchResult>> QueryAsync(string query, CancellationToken cancellationToken)
+    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken)
     {
-        var results = new List<LaunchResult>();
+        _matches.Clear();
         foreach (SettingsEntry entry in _entries)
         {
             if (entry.Score(query) is { } score)
             {
-                results.Add(new LaunchResult(entry.Id, entry.Title, entry.Subtitle, entry.IconSource, score, entry.Execute));
+                _matches.Add(new ScoredResult(entry.Result, score));
             }
         }
 
-        return ValueTask.FromResult<IReadOnlyList<LaunchResult>>(results);
+        return ValueTask.FromResult<IReadOnlyList<ScoredResult>>(_matches);
     }
 }

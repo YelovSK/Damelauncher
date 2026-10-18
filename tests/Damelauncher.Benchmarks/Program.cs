@@ -31,7 +31,7 @@ internal static class Program
         // Results come out synchronously, since none of these providers waits on anything.
         IReadOnlyList<LaunchResult> latest = [];
         using var search = new ResultSearch(
-            UsageHistory.Load(),
+            UsageHistory.Load(UsageHistory.DefaultPath),
             new ProgramsProvider(),
             new WindowsSettingsProvider(),
             new LauncherCommandsProvider(static () => { }, static () => { }));
@@ -47,7 +47,7 @@ internal static class Program
 
     private static int Query(IResultProvider provider, string query)
     {
-        ValueTask<IReadOnlyList<LaunchResult>> results = provider.QueryAsync(query, CancellationToken.None);
+        ValueTask<IReadOnlyList<ScoredResult>> results = provider.QueryAsync(query, CancellationToken.None);
         if (!results.IsCompleted)
         {
             throw new InvalidOperationException($"{provider.Name} didn't answer synchronously.");
@@ -60,7 +60,7 @@ internal static class Program
     // first, after the search's deadline, so only program results say the index is ready.
     private static async Task WaitUntilIndexedAsync(ResultSearch search, Func<IReadOnlyList<LaunchResult>> latest)
     {
-        while (!latest().Any(result => result.Id.StartsWith("programs:", StringComparison.Ordinal)))
+        while (!latest().Any(result => result.Provider is ProgramsProvider))
         {
             search.Search("a");
             await Task.Delay(50);

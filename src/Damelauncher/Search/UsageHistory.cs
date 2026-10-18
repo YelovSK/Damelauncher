@@ -1,4 +1,5 @@
 using System.Globalization;
+using Damelauncher.Plugins;
 
 namespace Damelauncher.Search;
 
@@ -7,8 +8,9 @@ namespace Damelauncher.Search;
 /// one with every launch and halves over every <see cref="HalfLife"/> without one.
 /// </summary>
 /// <remarks>
-/// Saved as text, one result per line: the score, when it was last updated, and the result's id,
-/// separated by tabs. The id comes last, so it can hold anything but a line break.
+/// Saved as text, one result per line: the score, when it was last updated, and the result's
+/// provider and id joined by a colon, separated by tabs. The id comes last, so it can hold
+/// anything but a line break.
 /// </remarks>
 internal sealed class UsageHistory
 {
@@ -16,28 +18,35 @@ internal sealed class UsageHistory
     // About two months unused after a single launch, past which an entry isn't worth keeping.
     private const double ForgottenScore = 0.05;
 
-    private static readonly string FilePath = Path.Combine(
+    internal static readonly string DefaultPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Damelauncher",
         "history.txt");
 
-    private readonly Dictionary<string, Entry> _entries;
+    private readonly string _path;
+    private readonly Dictionary<Key, Entry> _entries;
 
-    private UsageHistory(Dictionary<string, Entry> entries) => _entries = entries;
-
-    internal static UsageHistory Load()
+    private UsageHistory(string path, Dictionary<Key, Entry> entries)
     {
-        var entries = new Dictionary<string, Entry>(StringComparer.Ordinal);
+        _path = path;
+        _entries = entries;
+    }
+
+    /// <param name="path">Where the history is read from, and saved to on every change.</param>
+    internal static UsageHistory Load(string path)
+    {
+        var entries = new Dictionary<Key, Entry>();
         try
         {
-            foreach (string line in File.ReadLines(FilePath))
+            foreach (string line in File.ReadLines(path))
             {
                 string[] fields = line.Split('\t', 3);
                 if (fields.Length == 3
                     && double.TryParse(fields[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double score)
-                    && DateTime.TryParse(fields[1], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime updated))
+                    && DateTime.TryParse(fields[1], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime updated)
+                    && fields[2].Split(':', 2) is [string provider, string id])
                 {
-                    entries[fields[2]] = new Entry(score, updated.ToUniversalTime());
+                    entries[new Key(provider, id)] = new Entry(score, updated.ToUniversalTime());
                 }
             }
         }
@@ -46,27 +55,30 @@ internal sealed class UsageHistory
             // No history yet, or none that can be read, only means nothing ranks higher for it.
         }
 
-        return new UsageHistory(entries);
+        return new UsageHistory(path, entries);
     }
 
     /// <returns>The result's score now, or 0 when it hasn't been launched.</returns>
-    internal double GetScore(string id, DateTime now) =>
-        _entries.TryGetValue(id, out Entry entry) ? entry.ScoreAt(now) : 0.0;
+    internal double GetScore(LaunchResult result, DateTime now) =>
+        _entries.TryGetValue(GetKey(result), out Entry entry) ? entry.ScoreAt(now) : 0.0;
 
-    internal void RecordLaunch(string id)
+    internal void RecordLaunch(LaunchResult result)
     {
         DateTime now = DateTime.UtcNow;
-        _entries[id] = new Entry(GetScore(id, now) + 1.0, now);
+        _entries[GetKey(result)] = new Entry(GetScore(result, now) + 1.0, now);
         TrySave(now);
     }
 
-    internal void Forget(string id)
+    internal void Forget(LaunchResult result)
     {
-        if (_entries.Remove(id))
+        if (_entries.Remove(GetKey(result)))
         {
             TrySave(DateTime.UtcNow);
         }
     }
+
+    // Made of strings the result already holds, so looking one up allocates nothing.
+    private static Key GetKey(LaunchResult result) => new(result.Provider.Id, result.Id);
 
     private void TrySave(DateTime now)
     {
@@ -82,24 +94,26 @@ internal sealed class UsageHistory
 
     private void Save(DateTime now)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         // Written aside and swapped in, so a crash halfway through can't lose the whole history.
-        string temporaryPath = FilePath + ".tmp";
+        string temporaryPath = _path + ".tmp";
         using (var writer = new StreamWriter(temporaryPath))
         {
-            foreach ((string id, Entry entry) in _entries)
+            foreach ((Key key, Entry entry) in _entries)
             {
                 if (entry.ScoreAt(now) >= ForgottenScore)
                 {
                     writer.WriteLine(string.Create(
                         CultureInfo.InvariantCulture,
-                        $"{entry.Score:0.####}\t{entry.Updated:O}\t{id}"));
+                        $"{entry.Score:0.####}\t{entry.Updated:O}\t{key.Provider}:{key.Id}"));
                 }
             }
         }
 
-        File.Move(temporaryPath, FilePath, overwrite: true);
+        File.Move(temporaryPath, _path, overwrite: true);
     }
+
+    private readonly record struct Key(string Provider, string Id);
 
     private readonly record struct Entry(double Score, DateTime Updated)
     {

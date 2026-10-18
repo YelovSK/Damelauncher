@@ -6,7 +6,7 @@ Damelauncher is a keyboard launcher for Windows. It uses Win32 for the window an
 
 - `Dame.Win32` contains low-level Windows mechanisms such as windowing, input translation, global hotkeys, and shell integration.
 - `Dame.UI` is the app-independent UI framework: the element tree, layout, animation, and generic controls. It draws with Direct2D and takes input from Win32.
-- `Damelauncher.Plugins` is the contract between the launcher and its plugins: `IResultProvider`, `LaunchResult`, and the `FuzzyMatcher` every provider scores with. It depends on nothing else.
+- `Damelauncher.Plugins` is the contract between the launcher and its plugins: `IResultProvider`, `LaunchResult`, `ScoredResult`, and the `FuzzyMatcher` every provider scores with. It depends on nothing else.
 - `Damelauncher.Plugins.*` are the plugins, one project each. A plugin references the contract and, when it needs Windows mechanisms, `Dame.Win32`, but never the UI, the executable, or another plugin.
 - `Damelauncher` is the executable. It contains the renderer, the launcher UI, and the search that runs the plugins.
 
@@ -38,7 +38,9 @@ A plugin is an `IResultProvider`. `ResultSearch` initializes every provider once
 
 Providers are used on the window thread, which awaits resume on through `WindowSynchronizationContext`. A provider that needs more than a moment, to index or to ask another process, does that work elsewhere, like `ProgramsProvider` indexing on a COM worker.
 
-A `LaunchResult` is plain data plus the action that runs it, which the provider supplies as a closure. Results score with the shared `FuzzyMatcher`, so scores from different providers compare on one scale.
+A `LaunchResult` is what a result is, apart from any query: its provider, id, text, icon, and the action that runs it, which the provider supplies as a closure. A query answers with `ScoredResult`s, pairing a result with how well it matches, scored with the shared `FuzzyMatcher` so scores from different providers compare on one scale.
+
+This split is what keeps typing cheap, since search runs on every keystroke. Providers that know their results ahead, like programs and settings, build them once and answer each query by refilling the same list, so a keystroke doesn't allocate in them at all. `ResultSearch` merges into a fixed buffer that keeps only the best results instead of sorting every match, and arms its deadline timer only when a provider hasn't answered yet. `tests/Damelauncher.Benchmarks` measures the time and allocations per keystroke.
 
 A result names its icon by where the shell finds it, such as a file path or `shell:AppsFolder\…`, rather than carrying a bitmap, so providers never touch rendering. `ResultIcons` loads the icons of the rows in sight on COM workers through `ShellIcons`, uploads them to Direct2D on the window thread, and keeps the most recently used ones. Rows draw without their icon until it arrives.
 
@@ -46,4 +48,4 @@ A result can also have an actions menu: other things to do with it, like running
 
 ## Ranking
 
-A result's rank is its match score plus a boost for how often and how recently it was launched. Each `LaunchResult` carries an id that's stable within its provider, and `ResultSearch` qualifies it with the provider's id to look it up in `UsageHistory`. The history keeps one score per result, which grows by one with every launch and halves every two weeks, and saves it to `%LocalAppData%\Damelauncher\history.txt` as one tab-separated line per result. The boost grows with the logarithm of that score and is capped, so habit can lift a decent match but not a poor one.
+A result's rank is its match score plus a boost for how often and how recently it was launched. `UsageHistory` keys each result by its provider's id and its own, both strings the result already holds, so the lookup allocates nothing. The history keeps one score per result, which grows by one with every launch and halves every two weeks, and saves it to `%LocalAppData%\Damelauncher\history.txt` as one tab-separated line per result. The boost grows with the logarithm of that score and is capped, so habit can lift a decent match but not a poor one.

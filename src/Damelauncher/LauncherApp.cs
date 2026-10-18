@@ -47,7 +47,7 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
             Themes.Get(_settings.Current.Theme).Palette);
         _plugins = [new ProgramsProvider(), new WindowsSettingsProvider(), new EverythingProvider()];
         _search = new ResultSearch(
-            UsageHistory.Load(),
+            UsageHistory.Load(UsageHistory.DefaultPath),
             [.. _plugins, new LauncherCommandsProvider(OpenSettings, _window.Close)])
         {
             DisabledProviders = _settings.Current.DisabledPlugins,

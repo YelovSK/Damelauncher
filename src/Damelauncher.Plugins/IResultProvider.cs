@@ -21,12 +21,16 @@ internal interface IResultProvider
     public Task InitializeAsync(CancellationToken cancellationToken);
 
     /// <summary>The results for a trimmed, non-empty query. A newer query cancels this one.</summary>
-    public ValueTask<IReadOnlyList<LaunchResult>> QueryAsync(string query, CancellationToken cancellationToken);
+    /// <remarks>
+    /// The launcher is done with the list before it asks again, so a provider can hand out the
+    /// same list every time, refilled, and keep a keystroke from allocating.
+    /// </remarks>
+    public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, CancellationToken cancellationToken);
 
     /// <summary>
     /// What else can be done with one of this provider's results, such as running it as
     /// administrator, which the launcher offers in the result's actions menu.
     /// </summary>
-    /// <param name="result">One of this provider's results, with the id the provider gave it.</param>
+    /// <param name="result">One of this provider's results.</param>
     public IReadOnlyList<LaunchResult> GetActions(LaunchResult result) => [];
 }

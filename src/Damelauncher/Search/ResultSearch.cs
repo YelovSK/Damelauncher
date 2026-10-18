@@ -7,7 +7,11 @@ namespace Damelauncher.Search;
 /// Asks every provider about the query and merges their results as each one answers, ranking
 /// results that were launched often and recently higher.
 /// </summary>
-/// <remarks>Used on the window thread, which the providers' awaits resume on.</remarks>
+/// <remarks>
+/// Used on the window thread, which the providers' awaits resume on. Searching runs on every
+/// keystroke, so it reuses what it can: a search whose providers all answer at once allocates
+/// little more than the list of results it shows.
+/// </remarks>
 internal sealed class ResultSearch : IDisposable
 {
     private const int MaxResults = 50;
@@ -22,12 +26,20 @@ internal sealed class ResultSearch : IDisposable
     private readonly IResultProvider[] _providers;
     private readonly Task[] _initializations;
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly SynchronizationContext? _context;
+    private readonly Timer _deadline;
+    // The best results while merging, highest score first.
+    private readonly ScoredResult[] _best = new ScoredResult[MaxResults];
     private CancellationTokenSource? _query;
+    private PendingQuery? _pending;
+    private long _deadlineArmedAt;
 
     internal ResultSearch(UsageHistory history, params IResultProvider[] providers)
     {
         _history = history;
         _providers = providers;
+        _context = SynchronizationContext.Current;
+        _deadline = new Timer(static state => ((ResultSearch)state!).OnDeadline(), this, Timeout.Infinite, Timeout.Infinite);
         _initializations = [.. providers.Select(provider => provider.InitializeAsync(_lifetime.Token))];
     }
 
@@ -45,10 +57,20 @@ internal sealed class ResultSearch : IDisposable
         _query?.Cancel();
         _query?.Dispose();
         _query = null;
+        _pending = null;
+        _deadline.Change(Timeout.Infinite, Timeout.Infinite);
 
         query = query.Trim();
-        int[] enabled = [.. Enumerable.Range(0, _providers.Length).Where(index => !DisabledProviders.Contains(_providers[index].Id))];
-        if (query.Length == 0 || enabled.Length == 0)
+        int enabledCount = 0;
+        foreach (IResultProvider provider in _providers)
+        {
+            if (!DisabledProviders.Contains(provider.Id))
+            {
+                enabledCount++;
+            }
+        }
+
+        if (query.Length == 0 || enabledCount == 0)
         {
             ResultsChanged?.Invoke([]);
             return;
@@ -57,17 +79,26 @@ internal sealed class ResultSearch : IDisposable
         // The previous results stay up until the new ones are complete, so typing doesn't flicker
         // through the partial results of whichever providers answer first.
         _query = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        var pending = new PendingQuery(_providers.Length, enabled.Length);
-        foreach (int index in enabled)
+        var pending = new PendingQuery(_providers.Length, enabledCount);
+        _pending = pending;
+        for (int index = 0; index < _providers.Length; index++)
         {
-            _ = QueryProviderAsync(index, query, pending, _query.Token);
+            if (!DisabledProviders.Contains(_providers[index].Id))
+            {
+                _ = QueryProviderAsync(index, query, pending, _query.Token);
+            }
         }
 
-        _ = AwaitDeadlineAsync(pending, _query.Token);
+        // Providers that answered at once are already shown, so only a slower one needs a deadline.
+        if (pending.Unanswered > 0)
+        {
+            _deadlineArmedAt = Stopwatch.GetTimestamp();
+            _deadline.Change(AnswerDeadline, Timeout.InfiniteTimeSpan);
+        }
     }
 
     /// <param name="result">A result from <see cref="ResultsChanged"/>.</param>
-    internal void RecordLaunch(LaunchResult result) => _history.RecordLaunch(result.Id);
+    internal void RecordLaunch(LaunchResult result) => _history.RecordLaunch(result);
 
     /// <summary>
     /// The result's actions menu: what its provider offers for it, and forgetting its launches
@@ -76,24 +107,16 @@ internal sealed class ResultSearch : IDisposable
     /// <param name="result">A result from <see cref="ResultsChanged"/>.</param>
     internal IReadOnlyList<LaunchResult> GetActions(LaunchResult result)
     {
-        var actions = new List<LaunchResult>();
-        // Undoes the qualification from Rank, since the provider knows the result by its own id.
-        int separator = result.Id.IndexOf(':', StringComparison.Ordinal);
-        string providerId = result.Id[..separator];
-        if (_providers.FirstOrDefault(provider => provider.Id == providerId) is { } owner)
-        {
-            actions.AddRange(owner.GetActions(result with { Id = result.Id[(separator + 1)..] }));
-        }
-
-        if (_history.GetScore(result.Id, DateTime.UtcNow) > 0.0)
+        var actions = new List<LaunchResult>(result.Provider.GetActions(result));
+        if (_history.GetScore(result, DateTime.UtcNow) > 0.0)
         {
             actions.Add(new LaunchResult(
+                result.Provider,
                 "forget",
                 "Forget launches",
                 result.Title,
                 null,
-                0,
-                () => _history.Forget(result.Id)));
+                () => _history.Forget(result)));
         }
 
         return actions;
@@ -101,6 +124,7 @@ internal sealed class ResultSearch : IDisposable
 
     public void Dispose()
     {
+        _deadline.Dispose();
         _lifetime.Cancel();
         _query?.Dispose();
         _lifetime.Dispose();
@@ -120,7 +144,7 @@ internal sealed class ResultSearch : IDisposable
         try
         {
             await _initializations[index].WaitAsync(cancellationToken);
-            pending.Answers[index] = Rank(provider, await provider.QueryAsync(query, cancellationToken));
+            pending.Answers[index] = await provider.QueryAsync(query, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -140,58 +164,101 @@ internal sealed class ResultSearch : IDisposable
         }
     }
 
-    private async Task AwaitDeadlineAsync(PendingQuery pending, CancellationToken cancellationToken)
+    // On the timer's thread, which only hands the deadline to the window thread. Without a
+    // context to hand it to, as in benchmarks, it's handled right here.
+    private void OnDeadline()
     {
-        try
+        if (_context is null)
         {
-            await Task.Delay(AnswerDeadline, cancellationToken);
+            ShowPartialResults();
         }
-        catch (OperationCanceledException)
+        else
+        {
+            _context.Post(static state => ((ResultSearch)state!).ShowPartialResults(), this);
+        }
+    }
+
+    private void ShowPartialResults()
+    {
+        // A deadline that passed just as a newer search started belongs to the older one, which
+        // the newer search's own deadline, still ahead, tells apart.
+        if (_pending is not { Unanswered: > 0 } pending
+            || Stopwatch.GetElapsedTime(_deadlineArmedAt) < AnswerDeadline)
         {
             return;
         }
 
         pending.DeadlinePassed = true;
-        // With every answer in, the results were already shown when the last one arrived.
-        if (pending.Unanswered > 0)
-        {
-            ResultsChanged?.Invoke(Merge(pending.Answers));
-        }
+        ResultsChanged?.Invoke(Merge(pending.Answers));
     }
 
-    // Qualifies each id with its provider's, which keeps ids from different providers apart in the history.
-    private LaunchResult[] Rank(IResultProvider provider, IReadOnlyList<LaunchResult> results)
+    // Keeps the best results in order as they come instead of sorting them all, since a short
+    // query can match hundreds. Each goes after those with an equal score, so ties keep the
+    // providers' order and each provider's own.
+    private LaunchResult[] Merge(IReadOnlyList<ScoredResult>?[] answers)
     {
         DateTime now = DateTime.UtcNow;
-        return
-        [
-            .. results.Select(result =>
+        int count = 0;
+        foreach (IReadOnlyList<ScoredResult>? results in answers)
+        {
+            if (results is null)
             {
-                string id = $"{provider.Id}:{result.Id}";
-                return result with { Id = id, Score = result.Score + GetBoost(id, now) };
-            }),
-        ];
+                continue;
+            }
+
+            for (int index = 0; index < results.Count; index++)
+            {
+                LaunchResult result = results[index].Result;
+                int score = results[index].Score + GetBoost(result, now);
+                if (count == MaxResults && score <= _best[MaxResults - 1].Score)
+                {
+                    continue;
+                }
+
+                int position = count;
+                while (position > 0 && _best[position - 1].Score < score)
+                {
+                    position--;
+                }
+
+                int last = Math.Min(count, MaxResults - 1);
+                Array.Copy(_best, position, _best, position + 1, last - position);
+                _best[position] = new ScoredResult(result, score);
+                count = Math.Min(count + 1, MaxResults);
+            }
+        }
+
+        if (count == 0)
+        {
+            return [];
+        }
+
+        var merged = new LaunchResult[count];
+        for (int index = 0; index < count; index++)
+        {
+            merged[index] = _best[index].Result;
+        }
+
+        Array.Clear(_best, 0, count);
+        return merged;
     }
 
-    private int GetBoost(string id, DateTime now)
+    private int GetBoost(LaunchResult result, DateTime now)
     {
-        double points = Math.Min(MaxBoostPoints, BoostPointsPerDoubling * Math.Log2(1.0 + _history.GetScore(id, now)));
+        double usage = _history.GetScore(result, now);
+        if (usage == 0.0)
+        {
+            return 0;
+        }
+
+        double points = Math.Min(MaxBoostPoints, BoostPointsPerDoubling * Math.Log2(1.0 + usage));
         return (int)(points * FuzzyMatcher.Point);
     }
-
-    // A stable sort, so equal scores keep the providers' order and each provider's own order.
-    private static LaunchResult[] Merge(IReadOnlyList<LaunchResult>?[] answers) =>
-    [
-        .. answers
-            .SelectMany(results => results ?? [])
-            .OrderByDescending(result => result.Score)
-            .Take(MaxResults),
-    ];
 
     /// <summary>One query's answers so far, one slot per provider, which stays empty for one that's disabled.</summary>
     private sealed class PendingQuery(int providerCount, int askedCount)
     {
-        internal IReadOnlyList<LaunchResult>?[] Answers { get; } = new IReadOnlyList<LaunchResult>?[providerCount];
+        internal IReadOnlyList<ScoredResult>?[] Answers { get; } = new IReadOnlyList<ScoredResult>?[providerCount];
         internal int Unanswered { get; set; } = askedCount;
         internal bool DeadlinePassed { get; set; }
     }
