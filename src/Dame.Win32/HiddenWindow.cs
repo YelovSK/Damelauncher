@@ -6,26 +6,35 @@ using static Windows.Win32.PInvoke;
 
 namespace Dame.Win32;
 
-internal delegate void CopyDataHandler(nuint dataId, ReadOnlySpan<byte> data);
+/// <returns>The message's result, or <see langword="null"/> to leave it to the default handling.</returns>
+/// <remarks>
+/// Runs inside the window procedure, where an exception ends the process, so work that can fail
+/// should be posted elsewhere.
+/// </remarks>
+internal delegate nint? WindowMessageHandler(uint message, nuint wParam, nint lParam);
 
 /// <summary>
-/// An invisible window that only receives messages, as an address for other processes to send
-/// <c>WM_COPYDATA</c> replies to. Its messages arrive on the thread that created it.
+/// A window that is never shown, which exists to receive messages: replies from other
+/// processes, or notifications from the shell. Its messages arrive on the thread that created it.
 /// </summary>
-internal sealed unsafe class MessageWindow : IDisposable
+internal sealed unsafe class HiddenWindow : IDisposable
 {
-    private static readonly string WindowClassName = typeof(MessageWindow).FullName!;
+    private static readonly string WindowClassName = typeof(HiddenWindow).FullName!;
     // HWND_MESSAGE, the parent that makes a window message-only.
     private static readonly HWND MessageOnlyParent = new(-3);
     private static bool _windowClassRegistered;
 
-    private readonly CopyDataHandler _copyDataReceived;
+    private readonly WindowMessageHandler _handler;
     private GCHandle _selfHandle;
 
-    /// <param name="copyDataReceived">Gets the data only for the duration of the call.</param>
-    internal MessageWindow(CopyDataHandler copyDataReceived)
+    /// <param name="messageOnly">
+    /// Whether the window only receives messages sent straight to it. It then stays out of
+    /// window enumeration, but misses broadcasts and can't be brought to the foreground, which a
+    /// popup menu's owner has to be.
+    /// </param>
+    internal HiddenWindow(WindowMessageHandler handler, bool messageOnly)
     {
-        _copyDataReceived = copyDataReceived;
+        _handler = handler;
         nint instance = GetModuleHandle(default(PCWSTR));
         if (!_windowClassRegistered)
         {
@@ -37,15 +46,15 @@ internal sealed unsafe class MessageWindow : IDisposable
         fixed (char* className = WindowClassName)
         {
             Handle = CreateWindowEx(
-                default,
+                messageOnly ? default : WINDOW_EX_STYLE.WS_EX_TOOLWINDOW,
                 className,
                 null,
-                default,
+                messageOnly ? default : WINDOW_STYLE.WS_POPUP,
                 0,
                 0,
                 0,
                 0,
-                MessageOnlyParent,
+                messageOnly ? MessageOnlyParent : default,
                 default,
                 (HINSTANCE)instance,
                 (void*)GCHandle.ToIntPtr(_selfHandle));
@@ -54,7 +63,7 @@ internal sealed unsafe class MessageWindow : IDisposable
         if (Handle == 0)
         {
             _selfHandle.Free();
-            throw NativeMethods.CreateLastErrorException("Could not create a message window.");
+            throw NativeMethods.CreateLastErrorException("Could not create a hidden window.");
         }
     }
 
@@ -88,7 +97,7 @@ internal sealed unsafe class MessageWindow : IDisposable
 
             if (RegisterClassEx(in windowClass) == 0)
             {
-                throw NativeMethods.CreateLastErrorException("Could not register the message window class.");
+                throw NativeMethods.CreateLastErrorException("Could not register the hidden window class.");
             }
         }
     }
@@ -107,15 +116,11 @@ internal sealed unsafe class MessageWindow : IDisposable
             handle = GetWindowLongPtr(window, WINDOW_LONG_PTR_INDEX.GWLP_USERDATA);
         }
 
-        if (message == WM_COPYDATA
-            && handle != 0
-            && GCHandle.FromIntPtr(handle).Target is MessageWindow self
-            && (WindowCopyData.Data*)(nint)lParam is var data
-            && data is not null)
+        if (handle != 0
+            && GCHandle.FromIntPtr(handle).Target is HiddenWindow self
+            && self._handler(message, wParam, lParam) is { } result)
         {
-            var bytes = new ReadOnlySpan<byte>((void*)data->DataPointer, checked((int)data->ByteCount));
-            self._copyDataReceived(data->DataId, bytes);
-            return (LRESULT)1;
+            return (LRESULT)result;
         }
 
         return DefWindowProc(window, message, wParam, lParam);

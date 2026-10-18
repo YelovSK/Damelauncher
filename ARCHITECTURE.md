@@ -18,7 +18,7 @@ Damelauncher -> Dame.UI -> Dame.Win32
 
 ## Runtime flow
 
-`LauncherApp` is the composition root. It creates a hidden popup `AppWindow`, the `D2DRenderer`, `LauncherUi`, and `ResultSearch` with the list of providers, and registers a global hotkey on the window. The hotkey toggles the window, which is centered on the monitor under the cursor each time it opens. Escape, losing focus, or running a result hides it again; the process keeps running in the background.
+`LauncherApp` is the composition root. It creates a hidden popup `AppWindow`, the `D2DRenderer`, `LauncherUi`, and `ResultSearch` with the list of providers, and registers a global hotkey on the window. The hotkey toggles the window, which is centered on the monitor under the cursor each time it opens. Escape, losing focus, or running a result hides it again; the process keeps running in the background. A `TrayIcon` opens it too, and its menu can quit the launcher.
 
 Rendering is demand-driven, as in Dameview: input and state changes request frames, and nothing renders while nothing changes.
 

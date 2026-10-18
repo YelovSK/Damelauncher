@@ -21,6 +21,7 @@ internal sealed class LauncherApp : IDisposable
     private readonly D2DRenderer _renderer;
     private readonly LauncherUi _ui;
     private readonly ResultSearch _search;
+    private readonly TrayIcon _trayIcon;
 
     internal LauncherApp()
     {
@@ -56,6 +57,15 @@ internal sealed class LauncherApp : IDisposable
         _window.HotKeyPressed += HandleHotKey;
         _window.Deactivated += _window.Hide;
         _window.RegisterHotKey(ToggleHotKeyId, ToggleModifiers, ToggleKey);
+        // Posted to the window, which reports a failure the way it does its own, instead of it
+        // ending the process from the tray icon's window procedure.
+        _trayIcon = new TrayIcon(
+            "Damelauncher",
+            () => _window.Post(Show),
+            [
+                new TrayMenuItem("Open", () => _window.Post(Show)),
+                new TrayMenuItem("Quit", () => _window.Post(_window.Close)),
+            ]);
     }
 
     internal void Run()
@@ -80,6 +90,7 @@ internal sealed class LauncherApp : IDisposable
         _window.PointerInput -= HandlePointerInput;
         _window.HotKeyPressed -= HandleHotKey;
         _window.Deactivated -= _window.Hide;
+        _trayIcon.Dispose();
         _search.Dispose();
         _ui.Dispose();
         _renderer.Dispose();

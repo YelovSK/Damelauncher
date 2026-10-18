@@ -29,11 +29,11 @@ internal sealed class EverythingClient : IDisposable
     private const int ListHeaderSize = 5 * sizeof(uint);
     private const int ItemHeaderSize = 2 * sizeof(uint);
 
-    private readonly MessageWindow _window;
+    private readonly HiddenWindow _window;
     private readonly Dictionary<uint, TaskCompletionSource<EverythingItem[]>> _pendingReplies = [];
     private uint _lastReplyId;
 
-    internal EverythingClient() => _window = new MessageWindow(HandleReply);
+    internal EverythingClient() => _window = new HiddenWindow(HandleMessage, messageOnly: true);
 
     /// <returns>The matches in Everything's order, or <see langword="null"/> when Everything isn't running.</returns>
     internal async Task<EverythingItem[]?> SearchAsync(string search, int maxResults, CancellationToken cancellationToken)
@@ -79,6 +79,17 @@ internal sealed class EverythingClient : IDisposable
         BinaryPrimitives.WriteUInt32LittleEndian(header[24..], SortNameAscending);
         Encoding.Unicode.GetBytes(search, request.AsSpan(QueryHeaderSize));
         return request;
+    }
+
+    private nint? HandleMessage(uint message, nuint wParam, nint lParam)
+    {
+        if (!WindowCopyData.TryRead(message, lParam, out nuint dataId, out ReadOnlySpan<byte> data))
+        {
+            return null;
+        }
+
+        HandleReply(dataId, data);
+        return 1;
     }
 
     private void HandleReply(nuint dataId, ReadOnlySpan<byte> data)

@@ -29,6 +29,8 @@ internal sealed class TextInput : UiElement
     // Only a caret that stayed on screen glides; one that just appeared jumps into place.
     private bool _caretGlides;
     private string _text = string.Empty;
+    // Owned rather than taken from the shared cache, where every edit would leave a copy behind.
+    private IDWriteTextLayout? _textLayout;
     // The fixed end of the selection; the caret is the end that moves.
     private int _anchor;
     private float _horizontalOffset;
@@ -71,7 +73,7 @@ internal sealed class TextInput : UiElement
     private float ContentWidth => MathF.Max(0.0f, Bounds.Width - (2.0f * HorizontalPadding));
     private IDWriteTextLayout? TextLayout => _text.Length == 0
         ? null
-        : TextLayouts.Get(_text, TextFont, new SizeF(100_000.0f, 38.0f));
+        : _textLayout ??= TextLayouts.Create(_text, TextFont, new SizeF(100_000.0f, 38.0f));
 
     internal void Clear() => Text = string.Empty;
 
@@ -407,6 +409,8 @@ internal sealed class TextInput : UiElement
 
     private void NotifyTextChanged()
     {
+        _textLayout?.Dispose();
+        _textLayout = null;
         TextChanged?.Invoke(_text);
         InvalidateVisual();
     }

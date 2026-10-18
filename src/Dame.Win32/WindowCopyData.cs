@@ -35,6 +35,22 @@ internal static unsafe class WindowCopyData
         return !window.IsNull && Send(window, dataId, payload);
     }
 
+    /// <summary>Reads a received <c>WM_COPYDATA</c>, whose data is only valid while it's being handled.</summary>
+    internal static bool TryRead(uint message, nint lParam, out nuint dataId, out ReadOnlySpan<byte> payload)
+    {
+        var data = (Data*)lParam;
+        if (message != WM_COPYDATA || data is null)
+        {
+            dataId = 0;
+            payload = default;
+            return false;
+        }
+
+        dataId = data->DataId;
+        payload = new ReadOnlySpan<byte>((void*)data->DataPointer, checked((int)data->ByteCount));
+        return true;
+    }
+
     private static HWND Find(string windowClassName)
     {
         fixed (char* className = windowClassName)

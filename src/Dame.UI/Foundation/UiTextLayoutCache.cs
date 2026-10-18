@@ -51,11 +51,17 @@ internal sealed class UiTextLayoutCache : IDisposable
             return cached.Value.Layout;
         }
 
-        IDWriteTextLayout layout = _factory.CreateTextLayout(
-            text, GetFormat(font), maxSize.Width, maxSize.Height);
+        IDWriteTextLayout layout = Create(text, font, maxSize);
         _entries.Add(key, _recentlyUsed.AddFirst(new Entry(key, layout)));
         Trim();
         return layout;
+    }
+
+    /// <summary>Builds a layout outside the cache, which the caller owns and disposes.</summary>
+    internal IDWriteTextLayout Create(string text, UiFont font, SizeF maxSize)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return _factory.CreateTextLayout(text, GetFormat(font), maxSize.Width, maxSize.Height);
     }
 
     public void Dispose()
