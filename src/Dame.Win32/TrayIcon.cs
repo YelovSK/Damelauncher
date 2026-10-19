@@ -61,12 +61,16 @@ internal sealed unsafe class TrayIcon : IDisposable
         _tooltip.AsSpan(0, Math.Min(_tooltip.Length, tip.Length - 1)).CopyTo(tip);
 
         // Fails while there's no taskbar yet, such as when starting with Windows, and the icon
-        // is then added once the taskbar announces itself.
-        if (Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_ADD, in data))
+        // is then added once the taskbar announces itself. It also times out while Explorer is
+        // busy, sometimes after adding the icon anyway, so the version is set regardless: an
+        // icon left on version 0 reports clicks as messages this doesn't handle.
+        if (!Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_ADD, in data))
         {
-            data.Anonymous.uVersion = NOTIFYICON_VERSION_4;
-            _ = Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_SETVERSION, in data);
+            _ = Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_MODIFY, in data);
         }
+
+        data.Anonymous.uVersion = NOTIFYICON_VERSION_4;
+        _ = Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_SETVERSION, in data);
     }
 
     private NOTIFYICONDATAW CreateData() => new()
