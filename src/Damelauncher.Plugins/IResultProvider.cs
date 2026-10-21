@@ -24,6 +24,11 @@ internal interface IResultProvider
     public string? DefaultKeyword => null;
 
     /// <summary>
+    /// Whether queries without a keyword ask the provider too, until the user picks otherwise.
+    /// </summary>
+    public bool DefaultInNormalSearches => true;
+
+    /// <summary>
     /// Raised on the window thread when the provider's results changed by themselves, such as
     /// when a program was installed, so the current query is asked again.
     /// </summary>

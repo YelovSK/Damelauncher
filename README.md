@@ -15,6 +15,7 @@
   - Programs
   - Settings pages and power commands (lock, sleep, sign out, shut down, restart)
   - Files and folders through [Everything](https://www.voidtools.com/)
+  - Ending running programs, e.g. `kill chrome`
 - Icons for every result
 - Installs itself for the current user when run from elsewhere, no admin needed
 - Tray icon
@@ -36,7 +37,7 @@ Honestly, pretty much the same as [Dameview](https://github.com/YelovSK/Dameview
 
 There are already good launchers for Windows, e.g. Flow Launcher and Fluent Search. I was curious what it would take to make a minimal, performance-focused launcher on the same stack as Dameview. So I copied the UI and Win32 projects from Dameview, and built the launcher of top of that stack.
 
-There is no support for 3rd party plugins. It's as bare bones as possible for my specific use case, which includes just a couple of search providers/plugins - programs, settings, and Everything search.
+There is no support for 3rd party plugins. It's as bare bones as possible for my specific use case, which includes just a couple of search providers/plugins - programs, settings, Everything search, and ending processes.
 
 The code is written by AI, I have read very little of it (unlike Dameview, which I took more seriously).
 

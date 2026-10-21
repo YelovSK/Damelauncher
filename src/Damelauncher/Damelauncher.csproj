@@ -27,6 +27,7 @@
     <ProjectReference Include="../Dame.UI/Dame.UI.csproj" />
     <ProjectReference Include="../Damelauncher.Plugins/Damelauncher.Plugins.csproj" />
     <ProjectReference Include="../Damelauncher.Plugins.Everything/Damelauncher.Plugins.Everything.csproj" />
+    <ProjectReference Include="../Damelauncher.Plugins.Processes/Damelauncher.Plugins.Processes.csproj" />
     <ProjectReference Include="../Damelauncher.Plugins.Programs/Damelauncher.Plugins.Programs.csproj" />
     <ProjectReference Include="../Damelauncher.Plugins.WindowsSettings/Damelauncher.Plugins.WindowsSettings.csproj" />
     <ProjectReference Include="../Dame.Win32/Dame.Win32.csproj" />

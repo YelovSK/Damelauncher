@@ -10,8 +10,11 @@ internal sealed record PluginSettings
     /// </summary>
     public string? Keyword { get; init; }
 
-    /// <summary>Whether queries without a keyword ask the plugin too.</summary>
-    public bool InNormalSearches { get; init; } = true;
+    /// <summary>
+    /// Whether queries without a keyword ask the plugin too: <see langword="null"/> for the
+    /// plugin's own default.
+    /// </summary>
+    public bool? InNormalSearches { get; init; }
 
     /// <summary>
     /// How many of the plugin's results are shown at most: <see langword="null"/> for the

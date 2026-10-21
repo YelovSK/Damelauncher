@@ -4,6 +4,7 @@ using Dame.Win32.Input;
 using Damelauncher.Installation;
 using Damelauncher.Plugins;
 using Damelauncher.Plugins.Everything;
+using Damelauncher.Plugins.Processes;
 using Damelauncher.Plugins.Programs;
 using Damelauncher.Plugins.WindowsSettings;
 using Damelauncher.Rendering;
@@ -46,7 +47,7 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
             _renderer.DirectWriteFactory,
             _window.Dpi,
             Themes.Get(_settings.Current.Theme).Palette);
-        _plugins = [new ProgramsProvider(), new WindowsSettingsProvider(), new EverythingProvider()];
+        _plugins = [new ProgramsProvider(), new WindowsSettingsProvider(), new EverythingProvider(), new ProcessesProvider()];
         _search = new ResultSearch(
             UsageHistory.Load(UsageHistory.DefaultPath),
             [.. _plugins, new LauncherCommandsProvider(OpenSettings, _window.Close)])
@@ -237,7 +238,7 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
             new ProviderRouting(
                 settings.Enabled,
                 string.IsNullOrEmpty(keyword) ? null : keyword,
-                settings.InNormalSearches,
+                settings.InNormalSearches ?? plugin.DefaultInNormalSearches,
                 settings.MaxResults ?? plugin.DefaultMaxResults));
     }
 

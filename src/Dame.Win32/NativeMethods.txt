@@ -176,6 +176,13 @@ GlobalAlloc
 GlobalLock
 GlobalUnlock
 GlobalFree
+GetCurrentProcessId
+OpenProcess
+TerminateProcess
+QueryFullProcessImageName
+CreateToolhelp32Snapshot
+Process32FirstW
+Process32NextW
 
 // WinHTTP
 WinHttpOpen

@@ -195,7 +195,7 @@ internal sealed class SettingsUi : UiElement, IDisposable
             Described(
                 new Toggle(
                     "Include in normal searches",
-                    settings.InNormalSearches,
+                    settings.InNormalSearches ?? plugin.DefaultInNormalSearches,
                     included => UpdatePlugin(plugin, current => current with { InNormalSearches = included })),
                 "When off, it only answers queries that start with its keyword."),
             new SettingsRow(

@@ -61,7 +61,7 @@ internal static class SettingsIniSerializer
             {
                 Enabled = ReadBool(document, section, "enabled", ignored) ?? true,
                 Keyword = document.Get(section, "keyword"),
-                InNormalSearches = ReadBool(document, section, "normalSearch", ignored) ?? true,
+                InNormalSearches = ReadBool(document, section, "normalSearch", ignored),
                 MaxResults = ReadMaxResults(document, section, ignored),
             };
             plugins[section[PluginSectionPrefix.Length..]] = plugin;
@@ -76,7 +76,11 @@ internal static class SettingsIniSerializer
         {
             string section = PluginSectionPrefix + id;
             document.Set(section, "enabled", IniValue.FormatBool(plugin.Enabled));
-            document.Set(section, "normalSearch", IniValue.FormatBool(plugin.InNormalSearches));
+            if (plugin.InNormalSearches is { } inNormalSearches)
+            {
+                document.Set(section, "normalSearch", IniValue.FormatBool(inNormalSearches));
+            }
+
             if (plugin.Keyword is { } keyword)
             {
                 document.Set(section, "keyword", keyword);
