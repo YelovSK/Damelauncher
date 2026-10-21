@@ -34,6 +34,7 @@ internal sealed class ResultSearch : IDisposable
     private ScoredResult[] _best = new ScoredResult[50];
     private ScoredResult[] _providerBest = new ScoredResult[50];
     private CancellationTokenSource? _query;
+    private string _lastQuery = "";
     private PendingQuery? _pending;
     private long _deadlineArmedAt;
 
@@ -45,6 +46,11 @@ internal sealed class ResultSearch : IDisposable
         _asked = new bool[providers.Length];
         _context = SynchronizationContext.Current;
         _deadline = new Timer(static state => ((ResultSearch)state!).OnDeadline(), this, Timeout.Infinite, Timeout.Infinite);
+        foreach (IResultProvider provider in providers)
+        {
+            provider.Changed += SearchAgain;
+        }
+
         _initializations = [.. providers.Select(provider => provider.InitializeAsync(_lifetime.Token))];
     }
 
@@ -78,6 +84,7 @@ internal sealed class ResultSearch : IDisposable
 
     internal void Search(string query)
     {
+        _lastQuery = query;
         _query?.Cancel();
         _query?.Dispose();
         _query = null;
@@ -145,7 +152,17 @@ internal sealed class ResultSearch : IDisposable
         _lifetime.Dispose();
         foreach (IResultProvider provider in _providers)
         {
+            provider.Changed -= SearchAgain;
             (provider as IDisposable)?.Dispose();
+        }
+    }
+
+    // Only a query that asked providers has results that can be out of date.
+    private void SearchAgain()
+    {
+        if (_pending is not null)
+        {
+            Search(_lastQuery);
         }
     }
 

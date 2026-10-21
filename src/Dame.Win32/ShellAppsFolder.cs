@@ -45,6 +45,14 @@ internal static class ShellAppsFolder
         }
     }
 
+    /// <summary>Reports when apps are added, removed, or renamed, on the calling thread.</summary>
+    internal static ShellChangeWatcher WatchChanges(Action changed) =>
+        new(
+            FOLDERID_AppsFolder,
+            SHCNE_ID.SHCNE_UPDATEDIR | SHCNE_ID.SHCNE_UPDATEITEM | SHCNE_ID.SHCNE_CREATE
+                | SHCNE_ID.SHCNE_DELETE | SHCNE_ID.SHCNE_RENAMEITEM,
+            changed);
+
     /// <summary>The app's location in the shell, where its icon can be found too.</summary>
     internal static string GetPath(string parsingName) => FolderPath + parsingName;
 

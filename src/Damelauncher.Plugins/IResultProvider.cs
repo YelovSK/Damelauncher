@@ -23,6 +23,16 @@ internal interface IResultProvider
     /// </summary>
     public string? DefaultKeyword => null;
 
+    /// <summary>
+    /// Raised on the window thread when the provider's results changed by themselves, such as
+    /// when a program was installed, so the current query is asked again.
+    /// </summary>
+    public event Action? Changed
+    {
+        add { }
+        remove { }
+    }
+
     /// <summary>Prepares the provider, for example by indexing. Runs once, before its first query.</summary>
     public Task InitializeAsync(CancellationToken cancellationToken);
 

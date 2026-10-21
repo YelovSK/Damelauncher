@@ -279,3 +279,12 @@ MONITOR_FROM_FLAGS
 FOLDERID_Programs
 SHCNE_ID
 SHCNF_FLAGS
+
+// Shell change notifications
+SHChangeNotifyRegister
+SHChangeNotifyDeregister
+SHChangeNotification_Lock
+SHChangeNotification_Unlock
+SHGetKnownFolderIDList
+SHChangeNotifyEntry
+SHCNRF_SOURCE

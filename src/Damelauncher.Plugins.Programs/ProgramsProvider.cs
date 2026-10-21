@@ -3,10 +3,17 @@ using Dame.Win32;
 namespace Damelauncher.Plugins.Programs;
 
 /// <summary>Finds installed programs and apps, as the Start menu lists them.</summary>
-internal sealed class ProgramsProvider : IResultProvider
+internal sealed class ProgramsProvider : IResultProvider, IDisposable
 {
     private readonly List<ScoredResult> _matches = [];
+    private readonly ComWorkerQueue<object?> _worker = new("Programs index", 1, static () => null);
     private LaunchResult[] _programs = [];
+    private ShellChangeWatcher? _watcher;
+    private CancellationToken _lifetime;
+    private bool _indexing;
+    private bool _indexAgain;
+
+    public event Action? Changed;
 
     public string Id => "programs";
 
@@ -16,11 +23,10 @@ internal sealed class ProgramsProvider : IResultProvider
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        using var worker = new ComWorkerQueue<object?>("Programs index", 1, static () => null);
-        List<ShellApp> apps = await worker.Enqueue(
-            static (_, _) => ShellAppsFolder.Enumerate(),
-            cancellationToken: cancellationToken);
-        _programs = [.. apps.Select(CreateResult)];
+        _lifetime = cancellationToken;
+        // Watching first, so an app installed during the first index isn't missed.
+        _watcher = ShellAppsFolder.WatchChanges(Reindex);
+        await IndexAsync();
     }
 
     public ValueTask<IReadOnlyList<ScoredResult>> QueryAsync(string query, int maxResults, CancellationToken cancellationToken)
@@ -50,6 +56,47 @@ internal sealed class ProgramsProvider : IResultProvider
                     null,
                     () => ShellAppsFolder.Launch(result.Id, asAdministrator: true)),
             ];
+
+    public void Dispose()
+    {
+        _watcher?.Dispose();
+        _worker.Dispose();
+    }
+
+    // An install arrives as several changes in a row, so the ones during an index add up to one more.
+    private void Reindex()
+    {
+        if (_indexing)
+        {
+            _indexAgain = true;
+        }
+        else
+        {
+            _ = IndexAsync();
+        }
+    }
+
+    private async Task IndexAsync()
+    {
+        _indexing = true;
+        try
+        {
+            do
+            {
+                _indexAgain = false;
+                List<ShellApp> apps = await _worker.Enqueue(
+                    static (_, _) => ShellAppsFolder.Enumerate(),
+                    cancellationToken: _lifetime);
+                _programs = [.. apps.Select(CreateResult)];
+                Changed?.Invoke();
+            }
+            while (_indexAgain);
+        }
+        finally
+        {
+            _indexing = false;
+        }
+    }
 
     private LaunchResult CreateResult(ShellApp app) =>
         new(
