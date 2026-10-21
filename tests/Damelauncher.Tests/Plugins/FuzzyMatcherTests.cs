@@ -18,11 +18,12 @@ public sealed class FuzzyMatcherTests
         Assert.AreEqual(FuzzyMatcher.Score("notepad", "Notepad"), FuzzyMatcher.Score("NOTEPAD", "Notepad"));
 
     [TestMethod]
-    public void AnEmptyQueryOrOneLongerThanTheNameMatchesNothing()
-    {
-        Assert.IsNull(FuzzyMatcher.Score(string.Empty, "Notepad"));
+    public void AQueryLongerThanTheNameMatchesNothing() =>
         Assert.IsNull(FuzzyMatcher.Score("notepad++", "Notepad"));
-    }
+
+    [TestMethod]
+    public void AnEmptyQueryMatchesEveryNameEqually() =>
+        Assert.AreEqual(FuzzyMatcher.Score(string.Empty, "Notepad"), FuzzyMatcher.Score(string.Empty, "Visual Studio Code"));
 
     [TestMethod]
     public void ANameStartingWithTheQueryRanksAboveOneWithItLater() =>

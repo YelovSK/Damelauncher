@@ -87,7 +87,8 @@ internal sealed class ProgramsProvider : IResultProvider, IDisposable
                 List<ShellApp> apps = await _worker.Enqueue(
                     static (_, _) => ShellAppsFolder.Enumerate(),
                     cancellationToken: _lifetime);
-                _programs = [.. apps.Select(CreateResult)];
+                // Equal scores keep this order, so the whole list, shown for an empty query, reads alphabetically.
+                _programs = [.. apps.Select(CreateResult).OrderBy(program => program.Title, StringComparer.CurrentCultureIgnoreCase)];
                 Changed?.Invoke();
             }
             while (_indexAgain);

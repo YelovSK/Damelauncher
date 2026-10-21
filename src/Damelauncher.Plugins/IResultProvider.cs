@@ -42,7 +42,10 @@ internal interface IResultProvider
     /// </summary>
     public int? DefaultMaxResults => null;
 
-    /// <summary>The results for a trimmed, non-empty query. A newer query cancels this one.</summary>
+    /// <summary>
+    /// The results for a trimmed query, or all of them for an empty one, which comes from the
+    /// provider's keyword typed alone. A newer query cancels this one.
+    /// </summary>
     /// <param name="maxResults">
     /// How many of them can be shown. The launcher keeps the best that many itself, so a provider
     /// only needs this when finding fewer saves it work, such as asking another process for less.

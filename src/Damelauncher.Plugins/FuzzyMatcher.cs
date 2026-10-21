@@ -18,10 +18,18 @@ internal static class FuzzyMatcher
     private const int AdjacentBonus = 4;
     private const int PrefixBonus = 16;
 
-    /// <returns>Higher is better, or <see langword="null"/> when the name doesn't match.</returns>
+    /// <returns>
+    /// Higher is better, or <see langword="null"/> when the name doesn't match. An empty query
+    /// matches every name equally.
+    /// </returns>
     internal static int? Score(string query, string name)
     {
-        if (query.Length == 0 || query.Length > name.Length)
+        if (query.Length == 0)
+        {
+            return 0;
+        }
+
+        if (query.Length > name.Length)
         {
             return null;
         }

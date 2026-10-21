@@ -92,7 +92,7 @@ internal sealed class ResultSearch : IDisposable
         _deadline.Change(Timeout.Infinite, Timeout.Infinite);
 
         int askedCount = ChooseProviders(query, out string providerQuery);
-        if (providerQuery.Length == 0 || askedCount == 0)
+        if (askedCount == 0)
         {
             ResultsChanged?.Invoke([]);
             return;
@@ -198,9 +198,12 @@ internal sealed class ResultSearch : IDisposable
 
     /// <summary>
     /// Marks the providers a query asks: the ones its keyword belongs to, when it starts with
-    /// one and a space, and otherwise the ones in normal searches.
+    /// one and a space, otherwise the ones in normal searches, and none for a blank query.
     /// </summary>
-    /// <param name="providerQuery">What they're asked, without the keyword or surrounding spaces.</param>
+    /// <param name="providerQuery">
+    /// What they're asked, without the keyword or surrounding spaces. Empty after a keyword alone,
+    /// which asks for everything the provider has.
+    /// </param>
     /// <returns>How many are asked.</returns>
     private int ChooseProviders(string query, out string providerQuery)
     {
@@ -224,6 +227,12 @@ internal sealed class ResultSearch : IDisposable
             }
         }
 
+        providerQuery = text.TrimEnd();
+        if (providerQuery.Length == 0)
+        {
+            return 0;
+        }
+
         int normalCount = 0;
         for (int index = 0; index < _providers.Length; index++)
         {
@@ -231,7 +240,6 @@ internal sealed class ResultSearch : IDisposable
             normalCount += _asked[index] ? 1 : 0;
         }
 
-        providerQuery = text.TrimEnd();
         return normalCount;
     }
 

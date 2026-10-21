@@ -207,18 +207,19 @@ public sealed class ResultSearchTests
     }
 
     [TestMethod]
-    public void AKeywordWithNothingAfterItYetShowsNothing()
+    public void AKeywordWithNothingAfterItAsksItsProviderForEverything()
     {
         var programs = new FakeProvider("programs");
         var files = new FakeProvider("files");
+        files.Answer = _ => [new(files.Result("a"), 0)];
         using ResultSearch search = Create(programs, files);
         search.SetRouting("files", ProviderRouting.Default with { Keyword = "f" });
 
-        search.Search("f ");
+        search.Search("f  ");
 
-        Assert.IsEmpty(LastShown);
+        CollectionAssert.AreEqual(new[] { "a" }, Ids(LastShown));
         Assert.IsEmpty(programs.Queries);
-        Assert.IsEmpty(files.Queries);
+        CollectionAssert.AreEqual(new[] { string.Empty }, files.Queries);
     }
 
     [TestMethod]
