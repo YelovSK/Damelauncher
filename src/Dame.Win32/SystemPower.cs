@@ -19,13 +19,17 @@ internal static unsafe class SystemPower
         }
     }
 
+    // SetSuspendState returns only after the computer wakes. Called from the UI thread, the launcher's
+    // windows couldn't answer the suspend broadcast, which holds up other apps preparing for sleep.
     internal static void Sleep()
     {
         EnableShutdownPrivilege();
-        if (!SetSuspendState(false, false, false))
+        var thread = new Thread(() => SetSuspendState(false, false, false))
         {
-            throw NativeMethods.CreateLastErrorException("Could not put the computer to sleep.");
-        }
+            IsBackground = true,
+            Name = "Sleep",
+        };
+        thread.Start();
     }
 
     internal static void SignOut() => ExitWindows(EXIT_WINDOWS_FLAGS.EWX_LOGOFF, "sign out");
