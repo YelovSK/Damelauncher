@@ -8,6 +8,7 @@ internal sealed class ProgramsProvider : IResultProvider, IDisposable
     private readonly List<ScoredResult> _matches = [];
     private readonly ComWorkerQueue<object?> _worker = new("Programs index", 1, static () => null);
     private LaunchResult[] _programs = [];
+    private Dictionary<string, Uninstallers.Command> _uninstallers = [];
     private ShellChangeWatcher? _watcher;
     private CancellationToken _lifetime;
     private bool _indexing;
@@ -43,19 +44,24 @@ internal sealed class ProgramsProvider : IResultProvider, IDisposable
         return ValueTask.FromResult<IReadOnlyList<ScoredResult>>(_matches);
     }
 
-    public IReadOnlyList<LaunchResult> GetActions(LaunchResult result) =>
-        ShellAppsFolder.IsPackaged(result.Id)
-            ? []
-            :
-            [
-                new LaunchResult(
-                    this,
-                    "runas",
-                    "Run as administrator",
-                    result.Title,
-                    null,
-                    () => ShellAppsFolder.Launch(result.Id, asAdministrator: true)),
-            ];
+    public IReadOnlyList<LaunchResult> GetActions(LaunchResult result)
+    {
+        if (ShellAppsFolder.IsPackaged(result.Id))
+        {
+            return [CreateUninstallAction(result, () => ShellAppsFolder.UninstallPackage(result.Id))];
+        }
+
+        var runAsAdministrator = new LaunchResult(
+            this,
+            "runas",
+            "Run as administrator",
+            result.Title,
+            null,
+            () => ShellAppsFolder.Launch(result.Id, asAdministrator: true));
+        return _uninstallers.TryGetValue(result.Id, out Uninstallers.Command? uninstaller)
+            ? [runAsAdministrator, CreateUninstallAction(result, () => ConfirmUninstall(result.Title, uninstaller))]
+            : [runAsAdministrator];
+    }
 
     public void Dispose()
     {
@@ -84,11 +90,12 @@ internal sealed class ProgramsProvider : IResultProvider, IDisposable
             do
             {
                 _indexAgain = false;
-                List<ShellApp> apps = await _worker.Enqueue(
-                    static (_, _) => ShellAppsFolder.Enumerate(),
+                (List<ShellApp> apps, Dictionary<string, Uninstallers.Command> uninstallers) = await _worker.Enqueue(
+                    static (_, _) => FindApps(),
                     cancellationToken: _lifetime);
                 // Equal scores keep this order, so the whole list, shown for an empty query, reads alphabetically.
                 _programs = [.. apps.Select(CreateResult).OrderBy(program => program.Title, StringComparer.CurrentCultureIgnoreCase)];
+                _uninstallers = uninstallers;
                 Changed?.Invoke();
             }
             while (_indexAgain);
@@ -98,6 +105,35 @@ internal sealed class ProgramsProvider : IResultProvider, IDisposable
             _indexing = false;
         }
     }
+
+    private static (List<ShellApp> Apps, Dictionary<string, Uninstallers.Command> Uninstallers) FindApps()
+    {
+        List<ShellApp> apps = ShellAppsFolder.Enumerate();
+        var uninstallers = Uninstallers.Load();
+        var found = new Dictionary<string, Uninstallers.Command>();
+        foreach (ShellApp app in apps)
+        {
+            if (app.TargetPath is { } targetPath && uninstallers.Find(app.Name, targetPath) is { } uninstaller)
+            {
+                found[app.ParsingName] = uninstaller;
+            }
+        }
+
+        return (apps, found);
+    }
+
+    // Some uninstallers remove the program without asking, and the match to the app is only a guess,
+    // so the command is shown for a wrong one to stand out.
+    private static void ConfirmUninstall(string title, Uninstallers.Command uninstaller)
+    {
+        if (MessageDialog.Confirm($"Uninstall {title}", $"Uninstall {title}? This runs:\n\n\"{uninstaller.Path}\" {uninstaller.Arguments}"))
+        {
+            uninstaller.Run();
+        }
+    }
+
+    private LaunchResult CreateUninstallAction(LaunchResult result, Action uninstall) =>
+        new(this, "uninstall", "Uninstall", result.Title, null, uninstall);
 
     private LaunchResult CreateResult(ShellApp app) =>
         new(

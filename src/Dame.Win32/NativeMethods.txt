@@ -99,6 +99,8 @@ IFileOpenDialog
 FileOpenDialog
 IShellItem
 IShellItemImageFactory
+IShellItem2
+PKEY_Link_TargetParsingPath
 SIIGBF
 SHCreateItemFromParsingName
 IEnumShellItems

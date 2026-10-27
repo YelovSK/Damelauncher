@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Windows.Win32;
 using Windows.Win32.Foundation;
+using Windows.Win32.System.Com.StructuredStorage;
+using Windows.Win32.System.Variant;
 using Windows.Win32.UI.Shell;
 using static Windows.Win32.PInvoke;
 
@@ -10,7 +12,8 @@ namespace Dame.Win32;
 /// The app's id within the Apps folder: an AppUserModelID for packaged and pinned apps, or a
 /// path, sometimes behind a known folder GUID, for plain shortcuts.
 /// </param>
-internal readonly record struct ShellApp(string Name, string ParsingName);
+/// <param name="TargetPath">The file a desktop program's shortcut opens.</param>
+internal readonly record struct ShellApp(string Name, string ParsingName, string? TargetPath);
 
 /// <summary>
 /// The Apps folder, which lists what the Start menu does: desktop programs and packaged apps alike.
@@ -40,7 +43,8 @@ internal static class ShellAppsFolder
             if (GetDisplayName(next[0], SIGDN.SIGDN_NORMALDISPLAY) is { } name
                 && GetDisplayName(next[0], SIGDN.SIGDN_PARENTRELATIVEPARSING) is { } parsingName)
             {
-                apps.Add(new ShellApp(name, parsingName));
+                string? targetPath = IsPackaged(parsingName) ? null : GetTargetPath((IShellItem2)next[0]);
+                apps.Add(new ShellApp(name, parsingName, targetPath));
             }
         }
     }
@@ -56,18 +60,42 @@ internal static class ShellAppsFolder
     /// <summary>The app's location in the shell, where its icon can be found too.</summary>
     internal static string GetPath(string parsingName) => FolderPath + parsingName;
 
-    internal static void Launch(string parsingName, bool asAdministrator = false)
-    {
-        using var process = Process.Start(new ProcessStartInfo(GetPath(parsingName))
-        {
-            UseShellExecute = true,
-            Verb = asAdministrator ? "runas" : null,
-        });
-    }
+    internal static void Launch(string parsingName, bool asAdministrator = false) =>
+        Invoke(parsingName, asAdministrator ? "runas" : null);
+
+    /// <summary>Uninstalls a packaged app, after asking first.</summary>
+    /// <remarks>
+    /// A desktop program would only open the Programs and Features window, so run its own uninstaller instead.
+    /// </remarks>
+    internal static void UninstallPackage(string parsingName) => Invoke(parsingName, "uninstall");
 
     /// <summary>Whether the app comes from a package, which can't run as administrator.</summary>
     /// <remarks>A packaged app's id is its package family name and app id, joined by "!".</remarks>
     internal static bool IsPackaged(string parsingName) => parsingName.Contains('!', StringComparison.Ordinal);
+
+    private static void Invoke(string parsingName, string? verb)
+    {
+        using var process = Process.Start(new ProcessStartInfo(GetPath(parsingName))
+        {
+            UseShellExecute = true,
+            Verb = verb,
+        });
+    }
+
+    private static unsafe string? GetTargetPath(IShellItem2 item)
+    {
+        item.GetProperty(PKEY_Link_TargetParsingPath, out PROPVARIANT value);
+        try
+        {
+            return value.vt == VARENUM.VT_LPWSTR
+                ? value.Anonymous.Anonymous.Anonymous.pwszVal.ToString()
+                : null;
+        }
+        finally
+        {
+            PropVariantClear(ref value);
+        }
+    }
 
     private static unsafe string? GetDisplayName(IShellItem item, SIGDN kind)
     {
