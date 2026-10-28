@@ -297,3 +297,10 @@ SHChangeNotification_Unlock
 SHGetKnownFolderIDList
 SHChangeNotifyEntry
 SHCNRF_SOURCE
+
+// WinRT
+RoGetActivationFactory
+WindowsCreateString
+WindowsDeleteString
+IInspectable
+IAgileObject

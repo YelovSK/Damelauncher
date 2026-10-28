@@ -50,12 +50,18 @@ internal static class ShellAppsFolder
     }
 
     /// <summary>Reports when apps are added, removed, or renamed, on the calling thread.</summary>
-    internal static ShellChangeWatcher WatchChanges(Action changed) =>
-        new(
-            FOLDERID_AppsFolder,
-            SHCNE_ID.SHCNE_UPDATEDIR | SHCNE_ID.SHCNE_UPDATEITEM | SHCNE_ID.SHCNE_CREATE
-                | SHCNE_ID.SHCNE_DELETE | SHCNE_ID.SHCNE_RENAMEITEM,
-            changed);
+    /// <remarks>
+    /// The shell announces changes to shortcuts, but packaged apps only come and go through the
+    /// package catalog, so both are watched.
+    /// </remarks>
+    internal static IDisposable WatchChanges(Action changed) =>
+        new Watchers(
+            new ShellChangeWatcher(
+                FOLDERID_AppsFolder,
+                SHCNE_ID.SHCNE_UPDATEDIR | SHCNE_ID.SHCNE_UPDATEITEM | SHCNE_ID.SHCNE_CREATE
+                    | SHCNE_ID.SHCNE_DELETE | SHCNE_ID.SHCNE_RENAMEITEM,
+                changed),
+            new PackageCatalogWatcher(changed));
 
     /// <summary>The app's location in the shell, where its icon can be found too.</summary>
     internal static string GetPath(string parsingName) => FolderPath + parsingName;
@@ -72,6 +78,15 @@ internal static class ShellAppsFolder
     /// <summary>Whether the app comes from a package, which can't run as administrator.</summary>
     /// <remarks>A packaged app's id is its package family name and app id, joined by "!".</remarks>
     internal static bool IsPackaged(string parsingName) => parsingName.Contains('!', StringComparison.Ordinal);
+
+    private sealed class Watchers(ShellChangeWatcher shell, PackageCatalogWatcher packages) : IDisposable
+    {
+        public void Dispose()
+        {
+            shell.Dispose();
+            packages.Dispose();
+        }
+    }
 
     private static void Invoke(string parsingName, string? verb)
     {

@@ -9,7 +9,7 @@ internal sealed class ProgramsProvider : IResultProvider, IDisposable
     private readonly ComWorkerQueue<object?> _worker = new("Programs index", 1, static () => null);
     private LaunchResult[] _programs = [];
     private Dictionary<string, Uninstallers.Command> _uninstallers = [];
-    private ShellChangeWatcher? _watcher;
+    private IDisposable? _watcher;
     private CancellationToken _lifetime;
     private bool _indexing;
     private bool _indexAgain;
