@@ -47,7 +47,7 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
             _renderer.DirectWriteFactory,
             _window.Dpi,
             Themes.Get(_settings.Current.Theme).Palette);
-        _plugins = [new ProgramsProvider(), new WindowsSettingsProvider(), new EverythingProvider(), new ProcessesProvider()];
+        _plugins = CreatePlugins();
         _search = new ResultSearch(
             UsageHistory.Load(UsageHistory.DefaultPath),
             [.. _plugins, new LauncherCommandsProvider(OpenSettings, _window.Close)])
@@ -140,6 +140,10 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         }
     }
 
+    /// <summary>The plugins, in the order the settings list them.</summary>
+    internal static IResultProvider[] CreatePlugins() =>
+        [new ProgramsProvider(), new WindowsSettingsProvider(), new EverythingProvider(), new ProcessesProvider()];
+
     internal void Run()
     {
         // Opens once at startup too, so launching it shows that it's running. Without its hotkey,
@@ -229,18 +233,8 @@ internal sealed class LauncherApp : ISettingsActions, IDisposable
         _window.Show();
     }
 
-    private void RoutePlugin(IResultProvider plugin)
-    {
-        PluginSettings settings = _settings.Current.GetPlugin(plugin.Id);
-        string? keyword = (settings.Keyword ?? plugin.DefaultKeyword)?.Trim();
-        _search.SetRouting(
-            plugin.Id,
-            new ProviderRouting(
-                settings.Enabled,
-                string.IsNullOrEmpty(keyword) ? null : keyword,
-                settings.InNormalSearches ?? plugin.DefaultInNormalSearches,
-                settings.MaxResults ?? plugin.DefaultMaxResults));
-    }
+    private void RoutePlugin(IResultProvider plugin) =>
+        _search.SetRouting(plugin.Id, ProviderRouting.FromSettings(plugin, _settings.Current.GetPlugin(plugin.Id)));
 
     private void OpenSettings()
     {

@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.Com.StructuredStorage;
 using Windows.Win32.System.Variant;
@@ -11,8 +10,6 @@ namespace Dame.Win32;
 /// <summary>Reads a file's properties through the Windows property system, as Explorer shows them.</summary>
 internal static partial class ShellProperties
 {
-    private static readonly StrategyBasedComWrappers Wrappers = new();
-
     /// <param name="names">Canonical property names, such as <c>System.Photo.FNumber</c>.</param>
     /// <returns>Each property formatted for display, or <see langword="null"/> where the file has none.</returns>
     /// <remarks>Runs on a COM-initialized thread.</remarks>
@@ -26,11 +23,10 @@ internal static partial class ShellProperties
                 pathChars, null, GETPROPERTYSTOREFLAGS.GPS_BESTEFFORT, &iid, &instance));
         }
 
-        // A unique instance can be released at once, so the store does not keep the file open until a GC.
-        object wrapper = Wrappers.GetOrCreateObjectForComInstance((nint)instance, CreateObjectFlags.UniqueInstance);
+        // Released at once, so the store doesn't keep the file open until a garbage collection.
+        IPropertyStore store = UniqueComObjects.Own<IPropertyStore>(instance);
         try
         {
-            var store = (IPropertyStore)wrapper;
             string?[] values = new string?[names.Count];
             for (int index = 0; index < values.Length; index++)
             {
@@ -41,8 +37,7 @@ internal static partial class ShellProperties
         }
         finally
         {
-            (wrapper as IDisposable)?.Dispose();
-            Marshal.Release((nint)instance);
+            UniqueComObjects.Release(store);
         }
     }
 

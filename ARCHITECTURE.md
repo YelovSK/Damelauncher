@@ -54,3 +54,23 @@ A result can also have an actions menu: other things to do with it, like running
 ## Ranking
 
 A result's rank is its match score plus a boost for how often and how recently it was launched. `UsageHistory` keys each result by its provider's id and its own, both strings the result already holds, so the lookup allocates nothing. The history keeps one score per result, which grows by one with every launch and halves every two weeks, and saves it to `%LocalAppData%\Damelauncher\history.txt` as one tab-separated line per result. The boost grows with the logarithm of that score and is capped, so habit can lift a decent match but not a poor one.
+
+## Serve mode
+
+`Damelauncher.exe --serve` runs the search without the launcher's UI, for another program, such as a desktop shell, that starts it as a child process and draws the results itself. `ServeApp` takes `LauncherApp`'s place as the composition root: it reads the same settings and history, so ranking is shared, but has no visible window, tray icon, hotkey, or install prompt, and leaves out the launcher's own commands. A hidden `AppWindow` with a title of its own runs the message loop the providers need, so installing the launcher doesn't close it. It reads commands from standard input on a thread of its own, posts them to the window thread, and exits when the input ends or on `quit`. When the Windows-key setting is on, the tap is reported instead of opening anything.
+
+Both directions are UTF-8 lines of tab-separated fields; tabs and line breaks inside a field become spaces. `ServeCommand` reads the input and `ServeOutput` writes the output, flushing each message, or a whole batch of results, at once.
+
+```text
+→ query  <seq> <text>              seq increases; a newer query cancels this one
+→ run    <provider> <id>           runs one of the results last sent, counting it as a launch
+→ quit
+← ready                            once every provider has initialized
+← begin  <seq>                     all of the current results for query <seq>, best first,
+← result <provider> <id> <title> <subtitle> <icon>
+← end    <seq>
+← icon   <provider> <id> <path>    an icon that arrived after its result was sent
+← toggle                           the Windows key was tapped
+```
+
+Results are sent again whenever they change, as they would update on screen: as providers answer, and when one raises `Changed`. A query that a newer one replaced before any answer arrived gets none. An icon is a PNG's path, `glyph:` and a symbol from the icon font, or empty while it loads or when there is none. The other program can't load shell icons itself, so `ServeIcons` saves them as PNGs to `%LocalAppData%\Damelauncher\icons` through `PngWriter` on COM workers, and reuses them across runs. Most files show their type's icon, so files share one PNG per extension and folders share one, while programs, shortcuts, icon files and the like, which carry icons of their own, get one per path. Each PNG is named by a hash of that key. Using a PNG marks it by its last-write time, and serve mode deletes those unused for a month when it starts, so the cache stays small and an updated app's icon is eventually extracted again.

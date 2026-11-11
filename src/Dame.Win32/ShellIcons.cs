@@ -6,11 +6,11 @@ using static Windows.Win32.PInvoke;
 
 namespace Dame.Win32;
 
-/// <param name="Pixels">Premultiplied BGRA, top row first, four bytes per pixel with no padding.</param>
+/// <param name="Pixels">Straight BGRA, top row first, four bytes per pixel with no padding.</param>
 internal sealed record ShellIconImage(int Width, int Height, byte[] Pixels);
 
 /// <summary>The icons Explorer shows for files, folders, and apps.</summary>
-internal static unsafe class ShellIcons
+internal static unsafe partial class ShellIcons
 {
     /// <param name="parsingName">A path, or a shell location such as <c>shell:AppsFolder\…</c>.</param>
     /// <param name="size">The icon's width and height in pixels, which it's scaled to fit.</param>
@@ -18,11 +18,17 @@ internal static unsafe class ShellIcons
     /// <remarks>Runs on a COM-initialized thread: extracting an icon can take a while.</remarks>
     internal static ShellIconImage? Load(string parsingName, int size)
     {
-        if (SHCreateItemFromParsingName(parsingName, null, out IShellItemImageFactory factory).Failed)
+        Guid iid = typeof(IShellItemImageFactory).GUID;
+        void* instance;
+        fixed (char* name = parsingName)
         {
-            return null;
+            if (SHCreateItemFromParsingName(name, null, &iid, &instance) < 0)
+            {
+                return null;
+            }
         }
 
+        IShellItemImageFactory factory = UniqueComObjects.Own<IShellItemImageFactory>(instance);
         HBITMAP bitmap;
         try
         {
@@ -31,6 +37,10 @@ internal static unsafe class ShellIcons
         catch (COMException)
         {
             return null;
+        }
+        finally
+        {
+            UniqueComObjects.Release(factory);
         }
 
         try
@@ -83,36 +93,30 @@ internal static unsafe class ShellIcons
             _ = ReleaseDC(default, screen);
         }
 
-        Premultiply(pixels);
+        MakeOpaqueWithoutAlpha(pixels);
         return new ShellIconImage(width, height, pixels);
     }
 
-    // The shell's bitmaps carry straight alpha, and an icon without an alpha channel comes out
-    // with all of it zero, which means opaque rather than invisible.
-    private static void Premultiply(Span<byte> pixels)
+    // An icon without an alpha channel comes out with all of it zero, which means opaque rather
+    // than invisible.
+    private static void MakeOpaqueWithoutAlpha(Span<byte> pixels)
     {
-        bool hasAlpha = false;
         for (int index = 3; index < pixels.Length; index += 4)
         {
             if (pixels[index] != 0)
             {
-                hasAlpha = true;
-                break;
+                return;
             }
         }
 
-        for (int index = 0; index < pixels.Length; index += 4)
+        for (int index = 3; index < pixels.Length; index += 4)
         {
-            if (!hasAlpha)
-            {
-                pixels[index + 3] = 255;
-                continue;
-            }
-
-            int alpha = pixels[index + 3];
-            pixels[index] = (byte)((pixels[index] * alpha + 127) / 255);
-            pixels[index + 1] = (byte)((pixels[index + 1] * alpha + 127) / 255);
-            pixels[index + 2] = (byte)((pixels[index + 2] * alpha + 127) / 255);
+            pixels[index] = 255;
         }
     }
+
+    // Declared by hand for the raw pointer, which the generated one would wrap in an object
+    // that's only released once the garbage collector gets to it.
+    [LibraryImport("shell32")]
+    private static partial int SHCreateItemFromParsingName(char* pszPath, void* pbc, Guid* riid, void** ppv);
 }

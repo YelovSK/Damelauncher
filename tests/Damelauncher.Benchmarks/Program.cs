@@ -1,14 +1,17 @@
 using System.Diagnostics;
+using System.Text;
 using Damelauncher.Plugins;
 using Damelauncher.Plugins.Programs;
 using Damelauncher.Plugins.WindowsSettings;
 using Damelauncher.Search;
+using Damelauncher.Serve;
 
 namespace Damelauncher.Benchmarks;
 
 /// <summary>
 /// Times what one keystroke costs in the search path: each provider on its own, then the whole
-/// search with ranking and merging. Everything is left out, since it waits on another process.
+/// search with ranking and merging, and that search served as text. Everything is left out, since
+/// it waits on another process.
 /// </summary>
 /// <remarks>Run in Release: <c>dotnet run -c Release --project tests/Damelauncher.Benchmarks</c>.</remarks>
 internal static class Program
@@ -21,12 +24,12 @@ internal static class Program
 
     private static async Task Main()
     {
+        // Watching for installed apps needs a context to report through, which it gets as the
+        // providers start, before the first await leaves this one. Reports go to the thread pool.
+        SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
         var programs = new ProgramsProvider();
         var settings = new WindowsSettingsProvider();
-        await programs.InitializeAsync(CancellationToken.None);
-
-        Measure("Programs", query => Query(programs, query));
-        Measure("Windows settings", query => Query(settings, query));
+        Task programsIndexed = programs.InitializeAsync(CancellationToken.None);
 
         // Results come out synchronously, since none of these providers waits on anything.
         IReadOnlyList<LaunchResult> latest = [];
@@ -36,11 +39,29 @@ internal static class Program
             new WindowsSettingsProvider(),
             new LauncherCommandsProvider(static () => { }, static () => { }));
         search.ResultsChanged += results => latest = results;
+
+        await programsIndexed;
+        Measure("Programs", query => Query(programs, query));
+        Measure("Windows settings", query => Query(settings, query));
+
         await WaitUntilIndexedAsync(search, () => latest);
 
         Measure("Search (ranked and merged)", query =>
         {
             search.Search(query);
+            return latest.Count;
+        });
+
+        // Icons as once they're saved, since saving them happens on workers, outside a keystroke.
+        const string savedIcon = @"C:\Users\me\AppData\Local\Damelauncher\icons\0123456789abcdef.png";
+        using var writer = new StreamWriter(Stream.Null, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        var output = new ServeOutput(writer, static () => { });
+        Measure("Serve (command read, searched, results written)", query =>
+        {
+            // Built here as reading the line would, which allocates it too.
+            var command = (QueryCommand)ServeCommand.Parse("query\t1\t" + query)!;
+            search.Search(command.Text);
+            output.Results(command.Sequence, latest, static icon => icon is GlyphIcon glyph ? "glyph:" + glyph.Glyph : savedIcon);
             return latest.Count;
         });
     }

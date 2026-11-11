@@ -119,6 +119,9 @@ internal sealed class ResultSearch : IDisposable
         }
     }
 
+    /// <summary>Completes once every provider has initialized, and faults when any failed to.</summary>
+    internal Task WhenInitialized() => Task.WhenAll(_initializations);
+
     /// <param name="result">A result from <see cref="ResultsChanged"/>.</param>
     internal void RecordLaunch(LaunchResult result) => _history.RecordLaunch(result);
 

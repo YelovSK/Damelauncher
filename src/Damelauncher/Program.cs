@@ -1,5 +1,6 @@
 using Dame.Win32;
 using Damelauncher.Installation;
+using Damelauncher.Serve;
 using Damelauncher.Settings;
 
 namespace Damelauncher;
@@ -21,6 +22,13 @@ internal static class Program
             }
 
             var settings = SettingsService.Load();
+            if (args is ["--serve"])
+            {
+                using var server = new ServeApp(settings);
+                server.Run();
+                return;
+            }
+
 #if !DEBUG
             // Builds being worked on run from their output folder, where asking every time would only get in the way.
             if (OfferInstall(settings))

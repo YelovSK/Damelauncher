@@ -102,7 +102,6 @@ IShellItemImageFactory
 IShellItem2
 PKEY_Link_TargetParsingPath
 SIIGBF
-SHCreateItemFromParsingName
 IEnumShellItems
 BHID_EnumItems
 SHGetKnownFolderItem
@@ -304,3 +303,10 @@ WindowsCreateString
 WindowsDeleteString
 IInspectable
 IAgileObject
+
+// Windows Imaging Component
+CLSID_WICPngEncoder
+IWICBitmapEncoder
+IWICBitmapFrameEncode
+GUID_WICPixelFormat32bppBGRA
+WICBitmapEncoderCacheOption

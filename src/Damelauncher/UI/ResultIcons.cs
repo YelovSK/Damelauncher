@@ -81,7 +81,16 @@ internal sealed class ResultIcons : IDisposable
         ShellIconImage? image;
         try
         {
-            image = await _worker.Enqueue((_, _) => ShellIcons.Load(entry.Source, pixelSize));
+            image = await _worker.Enqueue((_, _) =>
+            {
+                ShellIconImage? loaded = ShellIcons.Load(entry.Source, pixelSize);
+                if (loaded is not null)
+                {
+                    Premultiply(loaded.Pixels);
+                }
+
+                return loaded;
+            });
         }
         catch (OperationCanceledException)
         {
@@ -130,6 +139,18 @@ internal sealed class ResultIcons : IDisposable
 
         _recentlyUsed.Clear();
         _entries.Clear();
+    }
+
+    // Direct2D takes premultiplied alpha, and the shell's icons carry it straight.
+    private static void Premultiply(Span<byte> pixels)
+    {
+        for (int index = 0; index < pixels.Length; index += 4)
+        {
+            int alpha = pixels[index + 3];
+            pixels[index] = (byte)((pixels[index] * alpha + 127) / 255);
+            pixels[index + 1] = (byte)((pixels[index + 1] * alpha + 127) / 255);
+            pixels[index + 2] = (byte)((pixels[index + 2] * alpha + 127) / 255);
+        }
     }
 
     private static int GetPixelSize(float dpi) => (int)MathF.Round(Size * dpi / 96.0f);

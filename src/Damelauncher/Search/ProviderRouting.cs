@@ -1,3 +1,6 @@
+using Damelauncher.Plugins;
+using Damelauncher.Settings;
+
 namespace Damelauncher.Search;
 
 /// <summary>Which queries reach a provider.</summary>
@@ -13,4 +16,15 @@ namespace Damelauncher.Search;
 internal readonly record struct ProviderRouting(bool Enabled, string? Keyword, bool InNormalSearches, int? MaxResults = null)
 {
     internal static readonly ProviderRouting Default = new(Enabled: true, Keyword: null, InNormalSearches: true);
+
+    /// <summary>The routing a plugin's settings choose, with the plugin's own defaults for what they leave unset.</summary>
+    internal static ProviderRouting FromSettings(IResultProvider plugin, PluginSettings settings)
+    {
+        string? keyword = (settings.Keyword ?? plugin.DefaultKeyword)?.Trim();
+        return new ProviderRouting(
+            settings.Enabled,
+            string.IsNullOrEmpty(keyword) ? null : keyword,
+            settings.InNormalSearches ?? plugin.DefaultInNormalSearches,
+            settings.MaxResults ?? plugin.DefaultMaxResults);
+    }
 }
