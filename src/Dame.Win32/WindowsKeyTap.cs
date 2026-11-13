@@ -14,8 +14,9 @@ namespace Dame.Win32;
 /// <remarks>
 /// <para>
 /// It watches every key press in the system through a low-level keyboard hook. Windows calls the
-/// hook on the thread that installed it, through that thread's message loop, and removes a hook
-/// that keeps the keyboard waiting, so it only keeps track of the key and hands the tap on.
+/// hook through the message loop of the thread that installed it and holds up all keyboard input
+/// until it returns, removing a hook that takes too long. So the hook gets a thread of its own,
+/// which does nothing else, and it only keeps track of the key and hands the tap on.
 /// </para>
 /// <para>
 /// While an elevated window has focus, the hook isn't told about keys, and the tap opens Start.
@@ -31,11 +32,13 @@ internal sealed unsafe class WindowsKeyTap : IDisposable
     private static WindowsKeyTap? _current;
 
     private readonly Action _tapped;
-    private readonly HHOOK _hook;
+    private readonly Thread _thread;
+    private uint _threadId;
+    private Exception? _failure;
     private bool _windowsKeyDown;
     private bool _combined;
 
-    /// <param name="tapped">Runs inside the hook, where it should only post the work elsewhere.</param>
+    /// <param name="tapped">Runs on the hook's thread, where it should only post the work elsewhere.</param>
     internal WindowsKeyTap(Action tapped)
     {
         if (_current is not null)
@@ -44,17 +47,20 @@ internal sealed unsafe class WindowsKeyTap : IDisposable
         }
 
         _tapped = tapped;
-        _hook = SetWindowsHookEx(
-            WINDOWS_HOOK_ID.WH_KEYBOARD_LL,
-            &HookProcedure,
-            (HINSTANCE)GetModuleHandle(default(PCWSTR)),
-            0);
-        if (_hook.IsNull)
+        _current = this;
+        _thread = new Thread(Watch) { IsBackground = true, Name = "Windows key" };
+        using (var hooked = new ManualResetEventSlim())
         {
-            throw NativeMethods.CreateLastErrorException("Could not watch the keyboard.");
+            _thread.Start(hooked);
+            hooked.Wait();
         }
 
-        _current = this;
+        if (_failure is not null)
+        {
+            _thread.Join();
+            _current = null;
+            throw _failure;
+        }
     }
 
     public void Dispose()
@@ -64,8 +70,38 @@ internal sealed unsafe class WindowsKeyTap : IDisposable
             return;
         }
 
-        _ = UnhookWindowsHookEx(_hook);
+        _ = PostThreadMessage(_threadId, WM_QUIT, default, default);
+        _thread.Join();
         _current = null;
+    }
+
+    private void Watch(object? hooked)
+    {
+        _threadId = GetCurrentThreadId();
+        // Creates the thread's message queue, so the quit that Dispose posts has somewhere to go.
+        _ = PeekMessage(out _, default, 0, 0, PEEK_MESSAGE_REMOVE_TYPE.PM_NOREMOVE);
+        HHOOK hook = SetWindowsHookEx(
+            WINDOWS_HOOK_ID.WH_KEYBOARD_LL,
+            &HookProcedure,
+            (HINSTANCE)GetModuleHandle(default(PCWSTR)),
+            0);
+        if (hook.IsNull)
+        {
+            _failure = NativeMethods.CreateLastErrorException("Could not watch the keyboard.");
+        }
+
+        ((ManualResetEventSlim)hooked!).Set();
+        if (hook.IsNull)
+        {
+            return;
+        }
+
+        // The hook is called from inside GetMessage, and no message but the quit arrives.
+        while (GetMessage(out _, default, 0, 0) > 0)
+        {
+        }
+
+        _ = UnhookWindowsHookEx(hook);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]

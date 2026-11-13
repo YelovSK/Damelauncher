@@ -310,3 +310,7 @@ IWICBitmapEncoder
 IWICBitmapFrameEncode
 GUID_WICPixelFormat32bppBGRA
 WICBitmapEncoderCacheOption
+
+GetMessage
+PostThreadMessage
+GetCurrentThreadId
